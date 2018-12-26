@@ -27,11 +27,15 @@
 /* The length of the VECTORS region is a bit larger than
  * is necessary based on the number of exception handlers.
  */
+
+#include "../memory_zones.h"
+#include "../cmsis_nvic.h"
+
 MEMORY
 {
-  VECTORS (rx)          : ORIGIN = 0x00000000, LENGTH = 0x00000400
-  FLASH (rx)            : ORIGIN = 0x00000400, LENGTH = 0x00040000 - 0x00000400
-  RAM (rwx)             : ORIGIN = 0x20000000, LENGTH = 0x00020000
+  VECTORS (rx)          : ORIGIN = MAPPABLE_START, LENGTH = MAPPABLE_SIZE
+  FLASH (rx)            : ORIGIN = ZBT_SRAM1_START, LENGTH = ZBT_SRAM1_SIZE
+  RAM (rwx)             : ORIGIN = ZBT_SRAM2_START, LENGTH = ZBT_SRAM2_SIZE
 }
 
 /* Linker script to place sections and symbol values. Should be used together
@@ -62,11 +66,10 @@ MEMORY
  */
 ENTRY(Reset_Handler)
 
-HEAP_SIZE  = 0x4000;
-STACK_SIZE = 0x1000;
+STACK_SIZE = 0x400;
 
 /* Size of the vector table in SRAM */
-M_VECTOR_RAM_SIZE = 0x140;
+M_VECTOR_RAM_SIZE = NVIC_VECTORS_SIZE;
 
 SECTIONS
 {
@@ -74,12 +77,12 @@ SECTIONS
     {
         __vector_table = .;
         KEEP(*(.vector_table))
-         . = ALIGN(4);
+         . = ALIGN(8);
     } > VECTORS
 
     .text :
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         *(.text*)
 
         KEEP(*(.init))
@@ -118,30 +121,30 @@ SECTIONS
 
     .interrupts_ram :
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         __VECTOR_RAM__ = .;
         __interrupts_ram_start__ = .;   /* Create a global symbol at data start */
         . += M_VECTOR_RAM_SIZE;
-        . = ALIGN(4);
+        . = ALIGN(8);
         __interrupts_ram_end__ = .;     /* Define a global symbol at data end */
     } > RAM
 
     .data :
     {
         PROVIDE(__etext = LOADADDR(.data));
-        . = ALIGN(4);
+        . = ALIGN(8);
         __data_start__ = .;
         *(vtable)
         *(.data)
         *(.data*)
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* preinit data */
         PROVIDE (__preinit_array_start = .);
         KEEP(*(.preinit_array))
         PROVIDE (__preinit_array_end = .);
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* init data */
         PROVIDE (__init_array_start = .);
         KEEP(*(SORT(.init_array.*)))
@@ -149,14 +152,14 @@ SECTIONS
         PROVIDE (__init_array_end = .);
 
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* finit data */
         PROVIDE (__fini_array_start = .);
         KEEP(*(SORT(.fini_array.*)))
         KEEP(*(.fini_array))
         PROVIDE (__fini_array_end = .);
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* All data end */
         __data_end__ = .;
 
@@ -174,13 +177,13 @@ SECTIONS
 
     .bss :
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         __START_BSS = .;
         __bss_start__ = .;
         *(.bss)
         *(.bss*)
         *(COMMON)
-        . = ALIGN(4);
+        . = ALIGN(8);
         __bss_end__ = .;
         __END_BSS = .;
 
@@ -188,13 +191,13 @@ SECTIONS
 
     bss_size = __bss_end__ - __bss_start__;
 
-    .heap :
+    .heap (COPY):
     {
         . = ALIGN(8);
         __end__ = .;
         PROVIDE(end = .);
         __HeapBase = .;
-        . += HEAP_SIZE;
+        *(.heap*)
         __HeapLimit = .;
         __heap_limit = .; /* Add for _sbrk */
     } > RAM

@@ -77,13 +77,8 @@ bool core_util_in_critical_section(void)
 
 void core_util_critical_section_enter(void)
 {
-// FIXME
-#ifdef FEATURE_UVISOR
-#warning "core_util_critical_section_enter needs fixing to work from unprivileged code"
-#else
     // If the reentrancy counter overflows something has gone badly wrong.
     MBED_ASSERT(critical_section_reentrancy_counter < UINT32_MAX);
-#endif /* FEATURE_UVISOR */
 
     hal_critical_section_enter();
 
@@ -92,10 +87,6 @@ void core_util_critical_section_enter(void)
 
 void core_util_critical_section_exit(void)
 {
-// FIXME
-#ifdef FEATURE_UVISOR
-#warning "core_util_critical_section_exit needs fixing to work from unprivileged code"
-#endif /* FEATURE_UVISOR */
 
     // If critical_section_enter has not previously been called, do nothing
     if (critical_section_reentrancy_counter == 0) {
@@ -109,12 +100,26 @@ void core_util_critical_section_exit(void)
     }
 }
 
+void core_util_atomic_flag_clear(volatile core_util_atomic_flag *flagPtr)
+{
+    flagPtr->_flag = false;
+}
+
 #if MBED_EXCLUSIVE_ACCESS
 
 /* Supress __ldrex and __strex deprecated warnings - "#3731-D: intrinsic is deprecated" */
 #if defined (__CC_ARM)
 #pragma diag_suppress 3731
 #endif
+
+bool core_util_atomic_flag_test_and_set(volatile core_util_atomic_flag *flagPtr)
+{
+    uint8_t currentValue;
+    do {
+        currentValue = __LDREXB(&flagPtr->_flag);
+    } while (__STREXB(true, &flagPtr->_flag));
+    return currentValue;
+}
 
 bool core_util_atomic_cas_u8(volatile uint8_t *ptr, uint8_t *expectedCurrentValue, uint8_t desiredValue)
 {
@@ -212,6 +217,15 @@ uint32_t core_util_atomic_decr_u32(volatile uint32_t *valuePtr, uint32_t delta)
 }
 
 #else
+
+bool core_util_atomic_flag_test_and_set(volatile core_util_atomic_flag *flagPtr)
+{
+    core_util_critical_section_enter();
+    uint8_t currentValue = flagPtr->_flag;
+    flagPtr->_flag = true;
+    core_util_critical_section_exit();
+    return currentValue;
+}
 
 bool core_util_atomic_cas_u8(volatile uint8_t *ptr, uint8_t *expectedCurrentValue, uint8_t desiredValue)
 {

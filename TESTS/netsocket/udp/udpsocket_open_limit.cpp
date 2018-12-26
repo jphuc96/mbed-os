@@ -17,20 +17,19 @@
 
 #include "greentea-client/test_env.h"
 #include "mbed.h"
-#include MBED_CONF_APP_HEADER_FILE
 #include "udp_tests.h"
 #include "UDPSocket.h"
 #include "unity/unity.h"
 #include "utest.h"
+#include "SocketStats.h"
 
 using namespace utest::v1;
 
-namespace
-{
-    typedef struct UDPSocketItem {
-        UDPSocket *sock;
-        UDPSocketItem *next;
-    } SocketItem;
+namespace {
+typedef struct UDPSocketItem {
+    UDPSocket *sock;
+    UDPSocketItem *next;
+} SocketItem;
 }
 
 void UDPSOCKET_OPEN_LIMIT()
@@ -71,9 +70,18 @@ void UDPSOCKET_OPEN_LIMIT()
         if (!socket_list_head) {
             break;
         }
-
+#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLE
+        int count = fetch_stats();
+        int open_count = 0;
+        for (int j = 0; j < count; j++) {
+            if ((udp_stats[j].state == SOCK_OPEN) && (udp_stats[j].proto == NSAPI_UDP)) {
+                open_count++;
+            }
+        }
+        TEST_ASSERT(open_count >= 3);
+#endif
         UDPSocketItem *tmp;
-        for(UDPSocketItem *it = socket_list_head; it;) {
+        for (UDPSocketItem *it = socket_list_head; it;) {
             ++open_sockets[i];
             tmp = it;
             it = it->next;

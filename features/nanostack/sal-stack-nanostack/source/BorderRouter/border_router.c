@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2017, Arm Limited and affiliates.
+ * Copyright (c) 2012-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -103,8 +103,7 @@ void nd_border_router_setup_refresh(nwk_interface_id id, bool fresh_abro)
         return;
     } else if (cur_interface->border_router_setup == 0) {
         return;
-    }
-    else if (!cur_interface->border_router_setup->nd_nwk) {
+    } else if (!cur_interface->border_router_setup->nd_nwk) {
         return;
     } else if (!cur_interface->border_router_setup->nd_border_router_configure) {
         return;
@@ -499,16 +498,15 @@ void border_router_start(protocol_interface_info_entry_t *cur, bool warm_link_re
     start_req.BeaconOrder = 0x0f;
     start_req.SuperframeOrder = 0x0f;
     start_req.PANCoordinator = 1;
-    if( cur->mac_api ){
+    if (cur->mac_api) {
         protocol_timer_start(PROTOCOL_TIMER_BOOTSTRAP_TIM, bootstrap_timer_handle, BOOTSTRAP_START_TIMEOUT);
-        cur->mac_api->mlme_req(cur->mac_api, MLME_START, (void*)&start_req);
+        cur->mac_api->mlme_req(cur->mac_api, MLME_START, (void *)&start_req);
     }
     if (warm_link_restart) {
         return;
     }
-
+    mac_neighbor_table_neighbor_list_clean(mac_neighbor_info(cur));
 #ifndef NO_MLE
-    mle_class_list_clean(cur->id);
     blacklist_clear();
 #endif
 
@@ -540,8 +538,8 @@ void border_router_start(protocol_interface_info_entry_t *cur, bool warm_link_re
 static int arm_mac_channel_list_analyze(protocol_interface_info_entry_t *cur)
 {
     int number_of_channels = 0;
-    for (int i=0; i<8; i++) {
-        for (int j=0; j<4; j++) {
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 4; j++) {
             number_of_channels += common_count_bits((uint8_t)(cur->mac_parameters->mac_channel_list.channel_mask[i] >> (j * 8)));
         }
     }
@@ -708,8 +706,8 @@ static int8_t arm_border_router_interface_down(protocol_interface_info_entry_t *
         cur->nwk_wpan_nvm_api->nvm_params_update_cb(cur->nwk_wpan_nvm_api, true);
     }
     cur->if_lowpan_security_params->mle_security_frame_counter = mle_service_security_get_frame_counter(cur->id);
+    mac_neighbor_table_neighbor_list_clean(mac_neighbor_info(cur));
 #ifndef NO_MLE
-    mle_class_list_clean(cur->id);
     blacklist_clear();
 #endif
     if (nd_nwk) {
@@ -781,14 +779,15 @@ int8_t arm_nwk_6lowpan_borderrouter_init(protocol_interface_info_entry_t *cur)
 
 #else
 
-int8_t arm_nwk_6lowpan_border_router_init(int8_t interface_id, const border_router_setup_s *border_router_setup_ptr) {
+int8_t arm_nwk_6lowpan_border_router_init(int8_t interface_id, const border_router_setup_s *border_router_setup_ptr)
+{
     (void) interface_id;
     (void) border_router_setup_ptr;
     return -3;
 }
 
 int8_t arm_nwk_6lowpan_border_router_context_parameter_update(int8_t interface_id, uint8_t c_id,
-        uint8_t compress_mode, uint16_t ttl)
+                                                              uint8_t compress_mode, uint16_t ttl)
 {
     (void) interface_id;
     (void) c_id;
@@ -810,13 +809,15 @@ int8_t arm_nwk_6lowpan_border_router_configure_push(int8_t interface_id)
     return -1;
 }
 
-int8_t arm_nwk_6lowpan_border_router_nd_context_load(int8_t interface_id, uint8_t *contex_data) {
+int8_t arm_nwk_6lowpan_border_router_nd_context_load(int8_t interface_id, uint8_t *contex_data)
+{
     (void) interface_id;
     (void) contex_data;
     return -1;
 }
 
-int8_t arm_nwk_6lowpan_border_router_context_update(int8_t interface_id, uint8_t c_id_flags, uint8_t context_len, uint16_t ttl, const uint8_t *context_ptr) {
+int8_t arm_nwk_6lowpan_border_router_context_update(int8_t interface_id, uint8_t c_id_flags, uint8_t context_len, uint16_t ttl, const uint8_t *context_ptr)
+{
     (void) interface_id;
     (void) c_id_flags;
     (void) context_len;
@@ -825,7 +826,8 @@ int8_t arm_nwk_6lowpan_border_router_context_update(int8_t interface_id, uint8_t
     return -1;
 }
 
-int8_t arm_nwk_6lowpan_border_route_nd_default_prefix_timeout_set(int8_t interface_id, uint32_t time) {
+int8_t arm_nwk_6lowpan_border_route_nd_default_prefix_timeout_set(int8_t interface_id, uint32_t time)
+{
     (void) interface_id;
     (void) time;
     return -1;

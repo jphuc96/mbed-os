@@ -17,8 +17,6 @@
 
 /* Nanostack implementation of NetworkSocketAPI */
 
-#include "mbed.h"
-#include "rtos.h"
 #include "Nanostack.h"
 #include "NanostackLockGuard.h"
 
@@ -63,15 +61,18 @@ enum socket_mode_t {
 class NanostackSocket {
 public:
     static void socket_callback(void *cb);
-    static void* operator new(std::size_t sz);
-    static void operator delete(void* ptr);
+    static void *operator new (std::size_t sz);
+    static void operator delete (void *ptr);
 
     NanostackSocket(int8_t protocol);
     ~NanostackSocket(void);
     bool open(void);
     int accept(NanostackSocket *accepted_socket, ns_address_t *addr);
     void close(void);
-    bool closed(void) {return SOCKET_MODE_CLOSED == mode;}
+    bool closed(void)
+    {
+        return SOCKET_MODE_CLOSED == mode;
+    }
     bool is_connecting(void);
     void set_connecting(ns_address_t *addr);
     bool is_connected(void);
@@ -103,21 +104,26 @@ private:
     socket_mode_t mode;
 };
 
-static NanostackSocket * socket_tbl[NS_INTERFACE_SOCKETS_MAX];
+static NanostackSocket *socket_tbl[NS_INTERFACE_SOCKETS_MAX];
 
 nsapi_error_t map_mesh_error(mesh_error_t err)
 {
     switch (err) {
-        case MESH_ERROR_NONE: return 0;
-        case MESH_ERROR_MEMORY: return NSAPI_ERROR_NO_MEMORY;
-        case MESH_ERROR_PARAM: return NSAPI_ERROR_UNSUPPORTED;
-        case MESH_ERROR_STATE: return NSAPI_ERROR_DEVICE_ERROR;
-        default: return NSAPI_ERROR_DEVICE_ERROR;
+        case MESH_ERROR_NONE:
+            return 0;
+        case MESH_ERROR_MEMORY:
+            return NSAPI_ERROR_NO_MEMORY;
+        case MESH_ERROR_PARAM:
+            return NSAPI_ERROR_UNSUPPORTED;
+        case MESH_ERROR_STATE:
+            return NSAPI_ERROR_DEVICE_ERROR;
+        default:
+            return NSAPI_ERROR_DEVICE_ERROR;
     }
 }
 
 static void convert_mbed_addr_to_ns(ns_address_t *ns_addr,
-                             const SocketAddress *s_addr)
+                                    const SocketAddress *s_addr)
 {
     ns_addr->type = ADDRESS_IPV6;
     ns_addr->identifier = s_addr->get_port();
@@ -144,10 +150,12 @@ static int8_t find_interface_by_address(const uint8_t target_addr[16])
     return -1;
 }
 
-void* NanostackSocket::operator new(std::size_t sz) {
+void *NanostackSocket::operator new (std::size_t sz)
+{
     return MALLOC(sz);
 }
-void NanostackSocket::operator delete(void* ptr) {
+void NanostackSocket::operator delete (void *ptr)
+{
     FREE(ptr);
 }
 
@@ -298,7 +306,8 @@ void NanostackSocket::signal_event()
     }
 }
 
-void NanostackSocket::socket_callback(void *cb) {
+void NanostackSocket::socket_callback(void *cb)
+{
     nanostack_assert_locked();
 
     socket_callback_t *sock_cb = (socket_callback_t *) cb;
@@ -306,7 +315,7 @@ void NanostackSocket::socket_callback(void *cb) {
     MBED_ASSERT(socket != NULL);
 
     tr_debug("socket_callback() sock=%d, event=%d, interface=%d, data len=%d",
-                     sock_cb->socket_id, sock_cb->event_type, sock_cb->interface_id, sock_cb->d_len);
+             sock_cb->socket_id, sock_cb->event_type, sock_cb->interface_id, sock_cb->d_len);
 
     switch (sock_cb->event_type) {
         case SOCKET_DATA:
@@ -508,7 +517,7 @@ Nanostack::call_in_callback_cb_t Nanostack::get_call_in_callback()
     return cb;
 }
 
-const char * Nanostack::get_ip_address()
+const char *Nanostack::get_ip_address()
 {
     NanostackLockGuard lock;
 
@@ -541,11 +550,11 @@ nsapi_error_t Nanostack::socket_open(void **handle, nsapi_protocol_t protocol)
         MBED_ASSERT(false);
         return NSAPI_ERROR_UNSUPPORTED;
     }
-    *handle = (void*)NULL;
+    *handle = (void *)NULL;
 
     NanostackLockGuard lock;
 
-    NanostackSocket * socket = new NanostackSocket(ns_proto);
+    NanostackSocket *socket = new NanostackSocket(ns_proto);
     if (socket == NULL) {
         tr_debug("socket_open() ret=%i", NSAPI_ERROR_NO_MEMORY);
         return NSAPI_ERROR_NO_MEMORY;
@@ -555,7 +564,7 @@ nsapi_error_t Nanostack::socket_open(void **handle, nsapi_protocol_t protocol)
         tr_debug("socket_open() ret=%i", NSAPI_ERROR_NO_MEMORY);
         return NSAPI_ERROR_NO_MEMORY;
     }
-    *handle = (void*)socket;
+    *handle = (void *)socket;
 
     tr_debug("socket_open() socket=%p, sock_id=%d, ret=0", socket, socket->socket_id);
 
@@ -566,7 +575,7 @@ nsapi_error_t Nanostack::socket_close(void *handle)
 {
     NanostackLockGuard lock;
     // Validate parameters
-    NanostackSocket * socket = static_cast<NanostackSocket *>(handle);
+    NanostackSocket *socket = static_cast<NanostackSocket *>(handle);
     if (NULL == handle) {
         MBED_ASSERT(false);
         return NSAPI_ERROR_NO_SOCKET;
@@ -582,7 +591,7 @@ nsapi_error_t Nanostack::socket_close(void *handle)
 nsapi_size_or_error_t Nanostack::do_sendto(void *handle, const ns_address_t *address, const void *data, nsapi_size_t size)
 {
     // Validate parameters
-    NanostackSocket * socket = static_cast<NanostackSocket *>(handle);
+    NanostackSocket *socket = static_cast<NanostackSocket *>(handle);
     if (handle == NULL) {
         MBED_ASSERT(false);
         return NSAPI_ERROR_NO_SOCKET;
@@ -606,7 +615,7 @@ nsapi_size_or_error_t Nanostack::do_sendto(void *handle, const ns_address_t *add
     int retcode;
 #if 0
     retcode = ::socket_sendto(socket->socket_id, address,
-                                            data, size);
+                              data, size);
 #else
     // Use sendmsg purely to get the new return style
     // of returning data written rather than 0 on success,
@@ -618,7 +627,7 @@ nsapi_size_or_error_t Nanostack::do_sendto(void *handle, const ns_address_t *add
     iov.iov_base = const_cast<void *>(data);
     iov.iov_len = size;
     msg.msg_name = const_cast<ns_address_t *>(address);
-    msg.msg_namelen = address ? sizeof *address : 0;
+    msg.msg_namelen = address ? sizeof * address : 0;
     msg.msg_iov = &iov;
     msg.msg_iovlen = 1;
     msg.msg_control = NULL;
@@ -773,7 +782,7 @@ nsapi_error_t Nanostack::setsockopt(void *handle, int level, int optname, const 
 
                 /* Check address types are IPv6, or unspecified for interface */
                 if (imr->imr_multiaddr.version != NSAPI_IPv6 ||
-                    (imr->imr_interface.version != NSAPI_UNSPEC && imr->imr_interface.version != NSAPI_IPv6)) {
+                        (imr->imr_interface.version != NSAPI_UNSPEC && imr->imr_interface.version != NSAPI_IPv6)) {
                     return NSAPI_ERROR_PARAMETER;
                 }
 
@@ -793,12 +802,15 @@ nsapi_error_t Nanostack::setsockopt(void *handle, int level, int optname, const 
                 break;
             }
             default:
-                return NSAPI_ERROR_PARAMETER;
+                return NSAPI_ERROR_UNSUPPORTED;
         }
     }
 
-    if (::socket_setsockopt(socket->socket_id, level, optname, optval, optlen) == 0) {
+    int retcode = ::socket_setsockopt(socket->socket_id, level, optname, optval, optlen);
+    if (retcode == 0) {
         return NSAPI_ERROR_OK;
+    } else if (retcode == -2) {
+        return NSAPI_ERROR_UNSUPPORTED;
     } else {
         return NSAPI_ERROR_PARAMETER;
     }
@@ -812,19 +824,19 @@ nsapi_error_t Nanostack::getsockopt(void *handle, int level, int optname, void *
         return NSAPI_ERROR_NO_SOCKET;
     }
 
-    nsapi_error_t ret;
-
     NanostackLockGuard lock;
 
     uint16_t optlen16 = *optlen;
-    if (::socket_getsockopt(socket->socket_id, level, optname, optval, &optlen16) == 0) {
-        ret = NSAPI_ERROR_OK;
-        *optlen = optlen16;
-    } else {
-        ret = NSAPI_ERROR_PARAMETER;
-    }
 
-    return ret;
+    int retcode = ::socket_getsockopt(socket->socket_id, level, optname, optval, &optlen16);
+    if (retcode == 0) {
+        *optlen = optlen16;
+        return NSAPI_ERROR_OK;
+    } else if (retcode == -2) {
+        return NSAPI_ERROR_UNSUPPORTED;
+    } else {
+        return NSAPI_ERROR_PARAMETER;
+    }
 }
 
 nsapi_error_t Nanostack::socket_listen(void *handle, int backlog)
@@ -840,7 +852,7 @@ nsapi_error_t Nanostack::socket_listen(void *handle, int backlog)
 
     NanostackLockGuard lock;
 
-    if(::socket_listen(socket->socket_id, backlog) < 0) {
+    if (::socket_listen(socket->socket_id, backlog) < 0) {
         ret = NSAPI_ERROR_PARAMETER;
     } else {
         socket->set_listening();
@@ -903,7 +915,7 @@ out:
 
 nsapi_error_t Nanostack::socket_accept(void *server, void **handle, SocketAddress *address)
 {
-    NanostackSocket * socket = static_cast<NanostackSocket *>(server);
+    NanostackSocket *socket = static_cast<NanostackSocket *>(server);
     NanostackSocket *accepted_sock = NULL;
     nsapi_error_t ret;
 
@@ -964,7 +976,7 @@ nsapi_size_or_error_t Nanostack::socket_recv(void *handle, void *data, nsapi_siz
 void Nanostack::socket_attach(void *handle, void (*callback)(void *), void *id)
 {
     // Validate parameters
-    NanostackSocket * socket = static_cast<NanostackSocket *>(handle);
+    NanostackSocket *socket = static_cast<NanostackSocket *>(handle);
     if (handle == NULL) {
         MBED_ASSERT(false);
         return;
@@ -978,7 +990,8 @@ void Nanostack::socket_attach(void *handle, void (*callback)(void *), void *id)
     tr_debug("socket_attach(socket=%p) sock_id=%d", socket, socket->socket_id);
 }
 
-Nanostack &Nanostack::get_instance() {
+Nanostack &Nanostack::get_instance()
+{
     static Nanostack nanostack;
     return nanostack;
 }
@@ -988,7 +1001,8 @@ Nanostack &Nanostack::get_instance() {
 #define NANOSTACK 0x99119911
 #if MBED_CONF_NSAPI_DEFAULT_STACK == NANOSTACK
 #undef NANOSTACK
-OnboardNetworkStack &OnboardNetworkStack::get_default_instance() {
+OnboardNetworkStack &OnboardNetworkStack::get_default_instance()
+{
     return Nanostack::get_instance();
 }
 #endif

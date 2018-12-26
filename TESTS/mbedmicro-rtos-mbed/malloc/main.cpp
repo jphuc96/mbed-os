@@ -20,11 +20,11 @@
 
 
 #if defined(MBED_RTOS_SINGLE_THREAD)
-  #error [NOT_SUPPORTED] test not supported
+#error [NOT_SUPPORTED] test not supported
 #endif
 
 #if !DEVICE_USTICKER
-  #error [NOT_SUPPORTED] test not supported
+#error [NOT_SUPPORTED] test not supported
 #endif
 
 using utest::v1::Case;
@@ -38,6 +38,10 @@ volatile bool thread_should_continue = true;
 #if defined(__CORTEX_A9)
 #define THREAD_STACK_SIZE   512
 #elif defined(__CORTEX_M23) || defined(__CORTEX_M33)
+#define THREAD_STACK_SIZE   512
+#elif defined(__ARM_FM)
+#define THREAD_STACK_SIZE   512
+#elif defined(TARGET_FUTURE_SEQUANA_PSA)
 #define THREAD_STACK_SIZE   512
 #else
 #define THREAD_STACK_SIZE   256
@@ -88,7 +92,7 @@ void test_multithread_allocation(void)
 
     // Give the test time to run
     while (test_time--) {
-        Thread::wait(1000);
+        ThisThread::sleep_for(1000);
     }
 
     // Join and delete all threads
@@ -138,7 +142,7 @@ void test_zero_allocation(void)
     void *data = NULL;
 
     data = malloc(0);
-    if(data != NULL) {
+    if (data != NULL) {
         free(data);
     }
     TEST_ASSERT_MESSAGE(true, "malloc(0) succeed - no undefined behaviour happens");

@@ -27,6 +27,10 @@ ROOT = abspath(join(dirname(__file__), ".."))
 ##############################################################################
 BUILD_DIR = abspath(join(ROOT, "BUILD"))
 
+# Default directory for dual-core and v8 targets
+# delivering secure binaries across builds
+DELIVERY_DIR = abspath(join(ROOT, "DELIVERY"))
+
 # ARM Compiler 5
 ARM_PATH = ""
 
@@ -35,9 +39,6 @@ ARMC6_PATH = ""
 
 # GCC ARM
 GCC_ARM_PATH = ""
-
-# GCC CodeRed
-GCC_CR_PATH = ""
 
 # IAR
 IAR_PATH = ""
@@ -57,6 +58,9 @@ MBED_ORG_USER = ""
 
 # Print compiler warnings and errors as link format
 PRINT_COMPILER_OUTPUT_AS_LINK = False
+
+# Compare against a fixed build of the project for space consumption
+COMPARE_FIXED = False
 
 # Print warnings/errors in color
 COLOR = False
@@ -80,8 +84,7 @@ except ImportError:
 ##############################################################################
 # User Settings (env vars)
 ##############################################################################
-_ENV_PATHS = ['ARM_PATH', 'GCC_ARM_PATH', 'GCC_CR_PATH', 'IAR_PATH',
-              'ARMC6_PATH']
+_ENV_PATHS = ['ARM_PATH', 'GCC_ARM_PATH', 'IAR_PATH', 'ARMC6_PATH']
 
 for _n in _ENV_PATHS:
     if getenv('MBED_'+_n):
@@ -91,7 +94,7 @@ for _n in _ENV_PATHS:
             print("WARNING: MBED_%s set as environment variable but doesn't"
                   " exist" % _n)
 
-_ENV_VARS = ['PRINT_COMPILER_OUTPUT_AS_LINK', 'COLOR']
+_ENV_VARS = ['PRINT_COMPILER_OUTPUT_AS_LINK', 'COLOR', 'COMPARE_FIXED']
 for _n in _ENV_VARS:
     value = getenv('MBED_%s' % _n)
     if value:

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, Arm Limited and affiliates.
+ * Copyright (c) 2014-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -42,6 +42,7 @@
 #include "NWK_INTERFACE/Include/protocol.h"
 #include "6LoWPAN/Thread/thread_config.h"
 #include "6LoWPAN/Thread/thread_common.h"
+#include "6LoWPAN/Thread/thread_extension_bbr.h"
 #include "6LoWPAN/Thread/thread_network_data_lib.h"
 #include "6LoWPAN/Thread/thread_network_data_storage.h"
 #include "6LoWPAN/Thread/thread_management_client.h"
@@ -120,7 +121,7 @@ static uint8_t *thread_management_server_border_router_nd_dnssl_option_read(thre
 {
     if (this->dns_search_list_option) {
         *resp_len = this->dns_search_list_option->option_length;
-        return (uint8_t*)&this->dns_search_list_option->option_data;
+        return (uint8_t *)&this->dns_search_list_option->option_data;
     } else {
         // TODO: Read DNSSL from stored ICMP RA messages.
         *resp_len = 0;
@@ -138,7 +139,7 @@ static uint8_t *thread_management_server_border_router_nd_rdnss_option_read(thre
 {
     if (this->recursive_dns_server_option) {
         *resp_len = this->recursive_dns_server_option->option_length;
-        return (uint8_t*)&this->recursive_dns_server_option->option_data;
+        return (uint8_t *)&this->recursive_dns_server_option->option_data;
     } else {
         // TODO: Read RDNSS from stored ICMP RA messages.
         *resp_len = 0;
@@ -214,7 +215,7 @@ static int thread_border_router_neighbor_discovery_data_req_cb(int8_t service_id
     }
 
 send_response:
-    coap_service_response_send(this->coap_service_id, COAP_REQUEST_OPTIONS_NONE, request_ptr, return_code, COAP_CT_OCTET_STREAM, resp_payload_ptr, ptr-resp_payload_ptr);
+    coap_service_response_send(this->coap_service_id, COAP_REQUEST_OPTIONS_NONE, request_ptr, return_code, COAP_CT_OCTET_STREAM, resp_payload_ptr, ptr - resp_payload_ptr);
     ns_dyn_mem_free(resp_payload_ptr);
     return 0;
 }
@@ -234,7 +235,7 @@ static bool thread_border_router_network_data_prefix_match(thread_network_data_c
 
         // check that prefix is hosted by this router
         if (!thread_nd_hosted_by_this_routerid(router_id, &nwk_prefix->routeList) &&
-            !thread_nd_hosted_by_this_routerid(router_id, &nwk_prefix->borderRouterList)) {
+                !thread_nd_hosted_by_this_routerid(router_id, &nwk_prefix->borderRouterList)) {
             return false;
         }
 
@@ -297,19 +298,19 @@ static bool thread_border_router_local_network_data_prefix_match(thread_network_
     return true;
 }
 
-static void thread_border_router_child_network_data_clean(uint8_t interface_id, uint16_t child_id)
+static void thread_border_router_child_network_data_clean(protocol_interface_info_entry_t *cur, uint16_t child_id)
 {
     uint8_t addr16_buf[2];
 
     common_write_16_bit(child_id, addr16_buf);
-    if (mle_class_get_by_link_address(interface_id, addr16_buf, ADDR_802_15_4_SHORT)) {
+    if (mac_neighbor_table_address_discover(mac_neighbor_info(cur), addr16_buf, ADDR_802_15_4_SHORT)) {
         /* Child is available in mle, do nothing */
         return;
     }
 
     // Child is not our child => network data contains data from lost children, remove it
     tr_debug("Remove nwk data from lost child: %04x", child_id);
-    thread_management_client_network_data_unregister(interface_id, child_id);
+    thread_management_client_network_data_unregister(cur->id, child_id);
 }
 
 static void thread_border_router_lost_children_nwk_data_validate(protocol_interface_info_entry_t *cur, uint16_t router_short_addr)
@@ -326,7 +327,7 @@ static void thread_border_router_lost_children_nwk_data_validate(protocol_interf
         ns_list_foreach(thread_network_server_data_entry_t, curRoute, &curLP->routeList) {
             if (thread_addr_is_child(router_short_addr, curRoute->routerID)) {
                 // Router children found
-                thread_border_router_child_network_data_clean(cur->id, curRoute->routerID);
+                thread_border_router_child_network_data_clean(cur, curRoute->routerID);
             }
         }
 
@@ -334,7 +335,7 @@ static void thread_border_router_lost_children_nwk_data_validate(protocol_interf
         ns_list_foreach(thread_network_server_data_entry_t, curBR, &curLP->borderRouterList) {
             if (thread_addr_is_child(router_short_addr, curBR->routerID)) {
                 // Router children found
-                thread_border_router_child_network_data_clean(cur->id, curBR->routerID);
+                thread_border_router_child_network_data_clean(cur, curBR->routerID);
             }
         }
     }
@@ -344,7 +345,7 @@ static void thread_border_router_lost_children_nwk_data_validate(protocol_interf
         ns_list_foreach(thread_network_data_service_server_entry_t, server, &service->server_list) {
             if (thread_addr_is_child(router_short_addr, server->router_id)) {
                 // Router children found
-                thread_border_router_child_network_data_clean(cur->id, server->router_id);
+                thread_border_router_child_network_data_clean(cur, server->router_id);
             }
         }
     }
@@ -529,14 +530,14 @@ void thread_border_router_seconds_timer(int8_t interface_id, uint32_t seconds)
         if (this->nwk_data_resubmit_timer > seconds) {
             this->nwk_data_resubmit_timer -= seconds;
         } else {
-             protocol_interface_info_entry_t *cur = protocol_stack_interface_info_get_by_id(interface_id);
-             this->nwk_data_resubmit_timer = 0;
-             if (cur) {
-                 if (!thread_border_router_local_srv_data_in_network_data_check(cur)) {
-                     tr_info("nwk data mismatch - resubmit");
-                     thread_border_router_publish(cur->id);
-                 }
-             }
+            protocol_interface_info_entry_t *cur = protocol_stack_interface_info_get_by_id(interface_id);
+            this->nwk_data_resubmit_timer = 0;
+            if (cur) {
+                if (!thread_border_router_local_srv_data_in_network_data_check(cur)) {
+                    tr_info("nwk data mismatch - resubmit");
+                    thread_border_router_publish(cur->id);
+                }
+            }
         }
     }
 }
@@ -553,7 +554,7 @@ void thread_border_router_resubmit_timer_set(int8_t interface_id, int16_t second
         this->nwk_data_resubmit_timer = seconds;
     } else {
         // re-init network data resubmit timer to default value
-        this->nwk_data_resubmit_timer = THREAD_DATA_RESUBMIT_DELAY + randLIB_get_random_in_range(0, THREAD_DATA_RESUBMIT_DELAY/10);
+        this->nwk_data_resubmit_timer = THREAD_DATA_RESUBMIT_DELAY + randLIB_get_random_in_range(0, THREAD_DATA_RESUBMIT_DELAY / 10);
     }
 }
 
@@ -591,6 +592,15 @@ void thread_border_router_network_data_update_notify(protocol_interface_info_ent
 
     thread_border_router_network_data_appl_callback(cur);
 }
+
+void thread_border_router_old_partition_data_clean(int8_t interface_id)
+{
+    thread_border_router_t *this = thread_border_router_find_by_interface(interface_id);
+    if (this) {
+        coap_service_request_delete_by_service_id(this->coap_service_id);
+    }
+    thread_extension_bbr_old_partition_data_clean(interface_id);
+}
 #endif // HAVE_THREAD_ROUTER
 
 /*External APIs*/
@@ -609,7 +619,7 @@ int thread_border_router_prefix_add(int8_t interface_id, uint8_t *prefix_ptr, ui
     if (!prefix_info_ptr || !prefix_ptr) {
         return -2;
     }
-    if(prefix_info_ptr->P_dhcp == true && prefix_info_ptr->P_slaac == true) {
+    if (prefix_info_ptr->P_dhcp == true && prefix_info_ptr->P_slaac == true) {
         return -3;// Can not configure both services on
     }
 
@@ -626,6 +636,7 @@ int thread_border_router_prefix_add(int8_t interface_id, uint8_t *prefix_ptr, ui
     service.stableData = prefix_info_ptr->stableData;
     service.P_on_mesh = prefix_info_ptr->P_on_mesh;
     service.P_nd_dns = prefix_info_ptr->P_nd_dns;
+    service.P_res1 = prefix_info_ptr->P_res1;
 
     return thread_local_server_list_add_on_mesh_server(&cur->thread_info->localServerDataBase, &prefixTlv, &service);
 #else
@@ -836,7 +847,6 @@ int thread_border_router_dns_search_list_option_set(int8_t interface_id, uint8_t
 static void thread_tmf_client_network_data_set_cb(int8_t interface_id, int8_t status, uint8_t *data_ptr, uint16_t data_len)
 {
     protocol_interface_info_entry_t *cur;
-    (void) status;
     (void) data_len;
     (void) data_ptr;
 
@@ -845,18 +855,20 @@ static void thread_tmf_client_network_data_set_cb(int8_t interface_id, int8_t st
         return;
     }
 
-    cur->thread_info->localServerDataBase.publish_active = false;
+    cur->thread_info->localServerDataBase.publish_coap_req_id = 0;
 
-    tr_debug("BR a/sd response status: %s, addr: %x",status?"Fail":"OK", cur->thread_info->localServerDataBase.registered_rloc16);
+    tr_debug("BR a/sd response status: %s, addr: %x", status ? "Fail" : "OK", cur->thread_info->localServerDataBase.registered_rloc16);
 
     if (cur->thread_info->localServerDataBase.publish_pending) {
         cur->thread_info->localServerDataBase.publish_pending = false;
         thread_border_router_publish(cur->id);
     }
 
-    // always update RLOC to new one. If COAP response fails then resubmit timer will trigger new a/sd
-    cur->thread_info->localServerDataBase.registered_rloc16 = mac_helper_mac16_address_get(cur);
-    cur->thread_info->localServerDataBase.release_old_address = false;
+    if (status == 0) {
+        // If request was successful, then update RLOC to new one.
+        cur->thread_info->localServerDataBase.registered_rloc16 = mac_helper_mac16_address_get(cur);
+        cur->thread_info->localServerDataBase.release_old_address = false;
+    }
 }
 #endif
 
@@ -883,21 +895,20 @@ int thread_border_router_publish(int8_t interface_id)
     rloc16 = mac_helper_mac16_address_get(cur);
     tr_debug("Border router old: %x, new: %x", cur->thread_info->localServerDataBase.registered_rloc16, rloc16);
 
-    if (cur->thread_info->localServerDataBase.publish_active) {
+    if (cur->thread_info->localServerDataBase.publish_coap_req_id) {
         if (rloc16 != cur->thread_info->localServerDataBase.registered_rloc16) {
             /*
-             * Device short address has changed, cancel previous a/sd and a/as requests
+             * Device short address has changed, cancel previous a/sd requests
              * and start resubmit timer
              * */
-            tr_debug("address changed, kill pending reuqests");
-            thread_management_client_pending_coap_request_kill(cur->id);
+            tr_debug("RLOC changed, kill pending a/sd request");
+            thread_management_client_coap_message_delete(cur->id, cur->thread_info->localServerDataBase.publish_coap_req_id);
             thread_border_router_resubmit_timer_set(interface_id, 5);
-            return 0;
         } else {
             cur->thread_info->localServerDataBase.publish_pending = true;
             tr_debug("Activate pending status for publish");
-            return 0;
         }
+        return 0;
     }
 
     //Allocate Memory for Data
@@ -917,7 +928,7 @@ int thread_border_router_publish(int8_t interface_id)
             cur->thread_info->localServerDataBase.registered_rloc16 != rloc16) {
         // Our address has changed so we must register our network with new address and remove the old address
         tr_debug("BR address changed - remove old %x", cur->thread_info->localServerDataBase.registered_rloc16);
-        ptr = thread_tmfcop_tlv_data_write_uint16(ptr,TMFCOP_TLV_RLOC16,cur->thread_info->localServerDataBase.registered_rloc16);
+        ptr = thread_tmfcop_tlv_data_write_uint16(ptr, TMFCOP_TLV_RLOC16, cur->thread_info->localServerDataBase.registered_rloc16);
     }
 
     cur->thread_info->localServerDataBase.registered_rloc16 = rloc16;
@@ -925,8 +936,10 @@ int thread_border_router_publish(int8_t interface_id)
     if (payload_ptr) {
         ns_dyn_mem_free(payload_ptr);
     }
-    if (ret_val == 0) {
-        cur->thread_info->localServerDataBase.publish_active = true;
+    if (ret_val > 0) {
+        // a/sd request successful, save coap request id
+        cur->thread_info->localServerDataBase.publish_coap_req_id = (uint16_t)ret_val;
+        ret_val = 0 ;
     }
 
     thread_border_router_resubmit_timer_set(interface_id, -1);
@@ -962,7 +975,7 @@ int thread_border_router_delete_all(int8_t interface_id)
 #endif
 }
 
-int thread_border_router_network_data_callback_register(int8_t interface_id, thread_network_data_tlv_cb* nwk_data_cb)
+int thread_border_router_network_data_callback_register(int8_t interface_id, thread_network_data_tlv_cb *nwk_data_cb)
 {
 #ifdef HAVE_THREAD
     protocol_interface_info_entry_t *cur = protocol_stack_interface_info_get_by_id(interface_id);
@@ -986,7 +999,7 @@ int thread_border_router_network_data_callback_register(int8_t interface_id, thr
 #endif
 }
 
-int thread_border_router_prefix_tlv_find(uint8_t* network_data_tlv, uint16_t network_data_tlv_length, uint8_t** prefix_tlv, bool *stable)
+int thread_border_router_prefix_tlv_find(uint8_t *network_data_tlv, uint16_t network_data_tlv_length, uint8_t **prefix_tlv, bool *stable)
 {
 #ifdef HAVE_THREAD
     uint16_t tlv_length;
@@ -995,7 +1008,7 @@ int thread_border_router_prefix_tlv_find(uint8_t* network_data_tlv, uint16_t net
     }
     //tr_debug("thread_tlv_lib_prefix_find() len=%d, tlv=%s", network_data_tlv_length, trace_array(network_data_tlv, network_data_tlv_length));
     *stable = true;
-    tlv_length = thread_meshcop_tlv_find_next(network_data_tlv, network_data_tlv_length, THREAD_NWK_DATA_TYPE_PREFIX|THREAD_NWK_STABLE_DATA, prefix_tlv);
+    tlv_length = thread_meshcop_tlv_find_next(network_data_tlv, network_data_tlv_length, THREAD_NWK_DATA_TYPE_PREFIX | THREAD_NWK_STABLE_DATA, prefix_tlv);
     if (tlv_length == 0) {
         tlv_length = thread_meshcop_tlv_find_next(network_data_tlv, network_data_tlv_length, THREAD_NWK_DATA_TYPE_PREFIX, prefix_tlv);
         *stable = false;
@@ -1010,7 +1023,7 @@ int thread_border_router_prefix_tlv_find(uint8_t* network_data_tlv, uint16_t net
 #endif
 }
 
-int thread_border_router_tlv_find(uint8_t* prefix_tlv, uint16_t prefix_tlv_length, uint8_t** border_router_tlv, bool *stable)
+int thread_border_router_tlv_find(uint8_t *prefix_tlv, uint16_t prefix_tlv_length, uint8_t **border_router_tlv, bool *stable)
 {
 #ifdef HAVE_THREAD
     uint16_t tlv_length;
@@ -1026,7 +1039,7 @@ int thread_border_router_tlv_find(uint8_t* prefix_tlv, uint16_t prefix_tlv_lengt
 
     // find stable prefix first and if not found return unstable data
     *stable = true;
-    tlv_length = thread_meshcop_tlv_find_next(prefix_tlv, prefix_tlv_length, THREAD_NWK_DATA_TYPE_BORDER_ROUTER|THREAD_NWK_STABLE_DATA, border_router_tlv);
+    tlv_length = thread_meshcop_tlv_find_next(prefix_tlv, prefix_tlv_length, THREAD_NWK_DATA_TYPE_BORDER_ROUTER | THREAD_NWK_STABLE_DATA, border_router_tlv);
     if (tlv_length == 0) {
         tlv_length = thread_meshcop_tlv_find_next(prefix_tlv, prefix_tlv_length, THREAD_NWK_DATA_TYPE_BORDER_ROUTER, border_router_tlv);
         *stable = false;
@@ -1073,7 +1086,7 @@ int thread_border_router_prefix_context_id(uint8_t *prefix_tlv, uint16_t prefix_
 #endif
 }
 
-int thread_border_router_service_tlv_find(uint8_t* network_data_tlv, uint16_t network_data_tlv_length, uint8_t** service_tlv, bool* stable)
+int thread_border_router_service_tlv_find(uint8_t *network_data_tlv, uint16_t network_data_tlv_length, uint8_t **service_tlv, bool *stable)
 {
 #ifdef HAVE_THREAD
     uint16_t tlv_length;
@@ -1082,7 +1095,7 @@ int thread_border_router_service_tlv_find(uint8_t* network_data_tlv, uint16_t ne
     }
 
     *stable = true;
-    tlv_length = thread_meshcop_tlv_find_next(network_data_tlv, network_data_tlv_length, THREAD_NWK_DATA_TYPE_SERVICE_DATA|THREAD_NWK_STABLE_DATA, service_tlv);
+    tlv_length = thread_meshcop_tlv_find_next(network_data_tlv, network_data_tlv_length, THREAD_NWK_DATA_TYPE_SERVICE_DATA | THREAD_NWK_STABLE_DATA, service_tlv);
     if (tlv_length == 0) {
         tlv_length = thread_meshcop_tlv_find_next(network_data_tlv, network_data_tlv_length, THREAD_NWK_DATA_TYPE_SERVICE_DATA, service_tlv);
         *stable = false;
@@ -1097,7 +1110,7 @@ int thread_border_router_service_tlv_find(uint8_t* network_data_tlv, uint16_t ne
 #endif
 }
 
-int thread_border_router_server_tlv_find(uint8_t* service_tlv, uint16_t service_tlv_length, uint8_t** server_tlv, bool* stable)
+int thread_border_router_server_tlv_find(uint8_t *service_tlv, uint16_t service_tlv_length, uint8_t **server_tlv, bool *stable)
 {
 #ifdef HAVE_THREAD
     uint16_t tlv_length;
@@ -1118,7 +1131,7 @@ int thread_border_router_server_tlv_find(uint8_t* service_tlv, uint16_t service_
     service_tlv_length = service_tlv_length - service_data_len - 2;
 
     *stable = true;
-    tlv_length = thread_meshcop_tlv_find_next(service_tlv, service_tlv_length, THREAD_NWK_DATA_TYPE_SERVER_DATA|THREAD_NWK_STABLE_DATA, server_tlv);
+    tlv_length = thread_meshcop_tlv_find_next(service_tlv, service_tlv_length, THREAD_NWK_DATA_TYPE_SERVER_DATA | THREAD_NWK_STABLE_DATA, server_tlv);
     if (tlv_length == 0) {
         tlv_length = thread_meshcop_tlv_find_next(service_tlv, service_tlv_length, THREAD_NWK_DATA_TYPE_SERVER_DATA, server_tlv);
         *stable = false;

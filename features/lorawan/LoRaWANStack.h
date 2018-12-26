@@ -51,23 +51,27 @@
 #include "system/lorawan_data_structures.h"
 #include "LoRaRadio.h"
 
+class LoRaPHY;
+
 class LoRaWANStack: private mbed::NonCopyable<LoRaWANStack> {
 
 public:
     LoRaWANStack();
 
-    /** Binds radio driver to PHY layer.
+    /** Binds PHY layer and radio driver to stack.
      *
      * MAC layer is totally detached from the PHY layer so the stack layer
-     * needs to play the role of an arbitrator. This API gets a radio driver
-     * object from the application (via LoRaWANInterface), binds it to the PHY
-     * layer and initialises radio callback handles which the radio driver will
+     * needs to play the role of an arbitrator.
+     * This API sets the PHY layer object to stack and bind the radio driver
+     * object from the application to the PHY layer.
+     * Also initialises radio callback handles which the radio driver will
      * use in order to report events.
      *
      * @param radio            LoRaRadio object, i.e., the radio driver
+     * @param phy              LoRaPHY object.
      *
      */
-    void bind_radio_driver(LoRaRadio &radio);
+    void bind_phy_and_radio_driver(LoRaRadio &radio, LoRaPHY &phy);
 
     /** End device initialization.
      * @param queue            A pointer to an EventQueue passed from the application.
@@ -479,7 +483,10 @@ private:
     void make_tx_metadata_available(void);
     void make_rx_metadata_available(void);
 
-    void handle_ack_expiry_for_class_c(void);
+    void handle_scheduling_failure(void);
+
+    void post_process_tx_with_reception(void);
+    void post_process_tx_no_reception(void);
 
 private:
     LoRaMac _loramac;
@@ -492,6 +499,7 @@ private:
     lorawan_tx_metadata _tx_metadata;
     lorawan_rx_metadata _rx_metadata;
     uint8_t _num_retry;
+    uint8_t _qos_cnt;
     uint32_t _ctrl_flags;
     uint8_t _app_port;
     bool _link_check_requested;
@@ -500,21 +508,6 @@ private:
     uint8_t _rx_payload[LORAMAC_PHY_MAXPAYLOAD];
     events::EventQueue *_queue;
     lorawan_time_t _tx_timestamp;
-
-#if defined(LORAWAN_COMPLIANCE_TEST)
-
-    /**
-     * Used only for compliance testing
-     */
-    void compliance_test_handler(loramac_mcps_indication_t *mcps_indication);
-
-    /**
-     * Used only for compliance testing
-     */
-    lorawan_status_t send_compliance_test_frame_to_mac();
-
-    compliance_test_t _compliance_test;
-#endif
 };
 
 #endif /* LORAWANSTACK_H_ */

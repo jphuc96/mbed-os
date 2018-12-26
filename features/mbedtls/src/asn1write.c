@@ -83,7 +83,9 @@ int mbedtls_asn1_write_len( unsigned char **p, unsigned char *start, size_t len 
         return( 4 );
     }
 
+#if SIZE_MAX > 0xFFFFFFFF
     if( len <= 0xFFFFFFFF )
+#endif
     {
         if( *p - start < 5 )
             return( MBEDTLS_ERR_ASN1_BUF_TOO_SMALL );
@@ -96,7 +98,9 @@ int mbedtls_asn1_write_len( unsigned char **p, unsigned char *start, size_t len 
         return( 5 );
     }
 
+#if SIZE_MAX > 0xFFFFFFFF
     return( MBEDTLS_ERR_ASN1_INVALID_LENGTH );
+#endif
 }
 
 int mbedtls_asn1_write_tag( unsigned char **p, unsigned char *start, unsigned char tag )
@@ -253,34 +257,37 @@ int mbedtls_asn1_write_int( unsigned char **p, unsigned char *start, int val )
     return( (int) len );
 }
 
-int mbedtls_asn1_write_printable_string( unsigned char **p, unsigned char *start,
-                                 const char *text, size_t text_len )
+int mbedtls_asn1_write_tagged_string( unsigned char **p, unsigned char *start, int tag,
+    const char *text, size_t text_len )
 {
     int ret;
     size_t len = 0;
 
     MBEDTLS_ASN1_CHK_ADD( len, mbedtls_asn1_write_raw_buffer( p, start,
-                  (const unsigned char *) text, text_len ) );
+        (const unsigned char *) text, text_len ) );
 
     MBEDTLS_ASN1_CHK_ADD( len, mbedtls_asn1_write_len( p, start, len ) );
-    MBEDTLS_ASN1_CHK_ADD( len, mbedtls_asn1_write_tag( p, start, MBEDTLS_ASN1_PRINTABLE_STRING ) );
+    MBEDTLS_ASN1_CHK_ADD( len, mbedtls_asn1_write_tag( p, start, tag ) );
 
     return( (int) len );
+}
+
+int mbedtls_asn1_write_utf8_string( unsigned char **p, unsigned char *start,
+    const char *text, size_t text_len )
+{
+    return( mbedtls_asn1_write_tagged_string(p, start, MBEDTLS_ASN1_UTF8_STRING, text, text_len) );
+}
+
+int mbedtls_asn1_write_printable_string( unsigned char **p, unsigned char *start,
+                                 const char *text, size_t text_len )
+{
+    return( mbedtls_asn1_write_tagged_string(p, start, MBEDTLS_ASN1_PRINTABLE_STRING, text, text_len) );
 }
 
 int mbedtls_asn1_write_ia5_string( unsigned char **p, unsigned char *start,
                            const char *text, size_t text_len )
 {
-    int ret;
-    size_t len = 0;
-
-    MBEDTLS_ASN1_CHK_ADD( len, mbedtls_asn1_write_raw_buffer( p, start,
-                  (const unsigned char *) text, text_len ) );
-
-    MBEDTLS_ASN1_CHK_ADD( len, mbedtls_asn1_write_len( p, start, len ) );
-    MBEDTLS_ASN1_CHK_ADD( len, mbedtls_asn1_write_tag( p, start, MBEDTLS_ASN1_IA5_STRING ) );
-
-    return( (int) len );
+    return( mbedtls_asn1_write_tagged_string(p, start, MBEDTLS_ASN1_IA5_STRING, text, text_len) );
 }
 
 int mbedtls_asn1_write_bitstring( unsigned char **p, unsigned char *start,

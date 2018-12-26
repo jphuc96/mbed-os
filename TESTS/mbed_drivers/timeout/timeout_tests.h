@@ -81,10 +81,10 @@ void test_single_call(void)
     int32_t sem_slots = sem.wait(0);
     TEST_ASSERT_EQUAL(0, sem_slots);
 
-    sem_slots = sem.wait(TEST_DELAY_MS + 1);
+    sem_slots = sem.wait(TEST_DELAY_MS + 2);
     TEST_ASSERT_EQUAL(1, sem_slots);
 
-    sem_slots = sem.wait(TEST_DELAY_MS + 1);
+    sem_slots = sem.wait(TEST_DELAY_MS + 2);
     TEST_ASSERT_EQUAL(0, sem_slots);
 
     timeout.detach();
@@ -114,7 +114,7 @@ void test_cancel(void)
     TEST_ASSERT_EQUAL(0, sem_slots);
     timeout.detach();
 
-    sem_slots = sem.wait(TEST_DELAY_MS + 1);
+    sem_slots = sem.wait(TEST_DELAY_MS + 2);
     TEST_ASSERT_EQUAL(0, sem_slots);
 }
 
@@ -147,7 +147,7 @@ void test_override(void)
     TEST_ASSERT_EQUAL(0, sem_slots);
     timeout.attach_callback(mbed::callback(sem_callback, &sem2), 2.0f * TEST_DELAY_US);
 
-    sem_slots = sem2.wait(2 * TEST_DELAY_MS + 1);
+    sem_slots = sem2.wait(2 * TEST_DELAY_MS + 2);
     TEST_ASSERT_EQUAL(1, sem_slots);
     sem_slots = sem1.wait(0);
     TEST_ASSERT_EQUAL(0, sem_slots);
@@ -177,7 +177,7 @@ void test_multiple(void)
     for (size_t i = 0; i < NUM_TIMEOUTS; i++) {
         timeouts[i].attach_callback(mbed::callback(cnt_callback, &callback_count), TEST_DELAY_US);
     }
-    Thread::wait(TEST_DELAY_MS + 1);
+    ThisThread::sleep_for(TEST_DELAY_MS + 2);
     TEST_ASSERT_EQUAL(NUM_TIMEOUTS, callback_count);
 }
 
@@ -263,7 +263,7 @@ void test_sleep(void)
     timer.start();
     timeout.attach_callback(mbed::callback(sem_callback, &sem), delay_us);
 
-    bool deep_sleep_allowed = sleep_manager_can_deep_sleep();
+    bool deep_sleep_allowed = sleep_manager_can_deep_sleep_test_check();
     TEST_ASSERT_FALSE_MESSAGE(deep_sleep_allowed, "Deep sleep should be disallowed");
     while (sem.wait(0) != 1) {
         sleep();
@@ -322,7 +322,7 @@ void test_deepsleep(void)
     timer.start();
     timeout.attach_callback(mbed::callback(sem_callback, &sem), delay_us);
 
-    bool deep_sleep_allowed = sleep_manager_can_deep_sleep();
+    bool deep_sleep_allowed = sleep_manager_can_deep_sleep_test_check();
     TEST_ASSERT_TRUE_MESSAGE(deep_sleep_allowed, "Deep sleep should be allowed");
     while (sem.wait(0) != 1) {
         sleep();
@@ -340,7 +340,7 @@ template<typename TimeoutTesterType>
 class TimeoutDriftTester {
 public:
     TimeoutDriftTester(us_timestamp_t period = 1000) :
-            _callback_count(0), _period(period), _timeout()
+        _callback_count(0), _period(period), _timeout()
     {
     }
 

@@ -16,6 +16,7 @@ limitations under the License.
 """
 import re
 from os.path import join, basename, splitext, dirname, exists
+from os import getenv
 from distutils.spawn import find_executable
 from distutils.version import LooseVersion
 
@@ -24,6 +25,7 @@ from tools.hooks import hook_tool
 from tools.utils import run_cmd, NotSupportedException
 
 class GCC(mbedToolchain):
+    OFFICIALLY_SUPPORTED = True
     LINKER_EXT = '.ld'
     LIBRARY_EXT = '.a'
 
@@ -59,7 +61,7 @@ class GCC(mbedToolchain):
         elif target.core.startswith("Cortex-M23"):
             self.cpu = ["-mcpu=cortex-m23"]
         elif target.core.startswith("Cortex-M33F"):
-            self.cpu = ["-mcpu=cortex-m33"]
+            self.cpu = ["-mcpu=cortex-m33+nodsp"]
         elif target.core.startswith("Cortex-M33"):
             self.cpu = ["-march=armv8-m.main"]
         else:
@@ -95,8 +97,8 @@ class GCC(mbedToolchain):
                 "-Wl,--cmse-implib",
                 "-Wl,--out-implib=%s" % join(build_dir, "cmse_lib.o")
             ])
-        elif target.core == "Cortex-M23-NS" or target.core == "Cortex-M33-NS":
-             self.flags["ld"].append("-D__DOMAIN_NS=1")
+        elif target.core == "Cortex-M23-NS" or target.core == "Cortex-M33-NS" or target.core == "Cortex-M33F-NS":
+             self.flags["ld"].append("-DDOMAIN_NS=1")
 
         self.flags["common"] += self.cpu
 
@@ -115,6 +117,9 @@ class GCC(mbedToolchain):
 
         self.ar = join(tool_path, "arm-none-eabi-ar")
         self.elf2bin = join(tool_path, "arm-none-eabi-objcopy")
+
+        self.use_distcc = (bool(getenv("DISTCC_POTENTIAL_HOSTS", False))
+                           and not getenv("MBED_DISABLE_DISTCC", False))
 
     def version_check(self):
         stdout, _, retcode = run_cmd([self.cc[0], "--version"], redirect=True)
@@ -136,7 +141,7 @@ class GCC(mbedToolchain):
                 "file": "",
                 "line": "",
                 "col": "",
-                "severity": "ERROR",
+                "severity": "Warning",
             })
 
     def is_not_supported_error(self, output):
@@ -180,10 +185,9 @@ class GCC(mbedToolchain):
         else:
             opts += ["-I%s" % i for i in includes]
 
-        if not for_asm:
-            config_header = self.get_config_header()
-            if config_header is not None:
-                opts = opts + self.get_config_option(config_header)
+        config_header = self.get_config_header()
+        if config_header is not None:
+            opts = opts + self.get_config_option(config_header)
         return opts
 
     @hook_tool
@@ -208,6 +212,8 @@ class GCC(mbedToolchain):
 
         # Call cmdline hook
         cmd = self.hook.get_cmdline_compiler(cmd)
+        if self.use_distcc:
+            cmd = ["distcc"] + cmd
 
         return [cmd]
 
@@ -257,8 +263,6 @@ class GCC(mbedToolchain):
         # Exec command
         self.notify.cc_verbose("Link: %s" % ' '.join(cmd))
         self.default_cmd(cmd)
-        if self.target.core == "Cortex-M23" or self.target.core == "Cortex-M33":
-            self.notify.info("Secure Library Object %s" %secure_file)
 
     @hook_tool
     def archive(self, objects, lib_path):
@@ -290,7 +294,7 @@ class GCC(mbedToolchain):
 
     @staticmethod
     def make_ld_define(name, value):
-        return "-D%s=0x%x" % (name, value)
+        return "-D%s=%s" % (name, value)
 
     @staticmethod
     def redirect_symbol(source, sync, build_dir):

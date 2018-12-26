@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, Arm Limited and affiliates.
+ * Copyright (c) 2016-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -74,7 +74,8 @@ int8_t arm_nwk_test_tcp_drop_rx(int state, uint8_t count)
     return retcode;
 }
 
-void arm_nwk_test_tcp_drop_reset() {
+void arm_nwk_test_tcp_drop_reset()
+{
     tcp_test_drop_reset();
 }
 

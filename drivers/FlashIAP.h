@@ -28,6 +28,20 @@
 #include "platform/SingletonPtr.h"
 #include "platform/PlatformMutex.h"
 #include "platform/NonCopyable.h"
+#include <algorithm>
+
+// Export ROM end address
+#if defined(TOOLCHAIN_GCC_ARM)
+extern uint32_t __etext;
+#define FLASHIAP_ROM_END ((uint32_t) &__etext)
+#elif defined(TOOLCHAIN_ARM)
+extern uint32_t Load$$LR$$LR_IROM1$$Limit[];
+#define FLASHIAP_ROM_END ((uint32_t)Load$$LR$$LR_IROM1$$Limit)
+#elif defined(TOOLCHAIN_IAR)
+#pragma section=".rodata"
+#pragma section=".text"
+#define FLASHIAP_ROM_END (std::max((uint32_t) __section_end(".rodata"), (uint32_t) __section_end(".text")))
+#endif
 
 namespace mbed {
 
@@ -117,6 +131,14 @@ public:
      */
     uint32_t get_page_size() const;
 
+    /** Get the flash erase value
+     *
+     *  Get the value we read after erase operation
+     *  @return flash erase value
+     */
+    uint8_t get_erase_value() const;
+
+#if !defined(DOXYGEN_ONLY)
 private:
 
     /* Check if address and size are aligned to a sector
@@ -130,6 +152,7 @@ private:
     flash_t _flash;
     uint8_t *_page_buf;
     static SingletonPtr<PlatformMutex> _mutex;
+#endif
 };
 
 } /* namespace mbed */

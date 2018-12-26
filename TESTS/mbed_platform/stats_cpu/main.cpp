@@ -38,7 +38,7 @@ static int32_t wait_time = 5000;
 static void busy_thread()
 {
     volatile uint64_t i = ~0;
-    
+
     while (i--) {
         led1 = !led1;
         wait_us(wait_time);
@@ -56,7 +56,7 @@ void get_cpu_usage()
         uint8_t usage = 100 - ((diff * 100) / (SAMPLE_TIME * 1000));
         prev_idle_time = stats.idle_time;
         TEST_ASSERT_NOT_EQUAL(0, usage);
-        Thread::wait(SAMPLE_TIME);
+        ThisThread::sleep_for(SAMPLE_TIME);
     }
 }
 
@@ -65,7 +65,7 @@ void test_cpu_info(void)
     mbed_stats_cpu_t stats;
     // Additional read to make sure timer is initialized
     mbed_stats_cpu_get(&stats);
-    Thread::wait(3);
+    ThisThread::sleep_for(3);
     mbed_stats_cpu_get(&stats);
     TEST_ASSERT_NOT_EQUAL(0, stats.uptime);
     TEST_ASSERT_NOT_EQUAL(0, stats.idle_time);
@@ -83,7 +83,7 @@ void test_cpu_load(void)
 
     // Steadily increase the system load
     for (int count = 1; ; count++) {
-        Thread::wait(LOOP_TIME);
+        ThisThread::sleep_for(LOOP_TIME);
         if (wait_time <= 0) {
             break;
         }

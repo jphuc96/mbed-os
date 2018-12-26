@@ -49,7 +49,7 @@ struct coap_s *sn_coap_protocol_init(void *(*used_malloc_func_ptr)(uint16_t), vo
                                      uint8_t (*used_tx_callback_ptr)(uint8_t *, uint16_t, sn_nsdl_addr_s *, void *),
                                      int8_t (*used_rx_callback_ptr)(sn_coap_hdr_s *, sn_nsdl_addr_s *, void *param))
 {
-    if( sn_coap_protocol_stub.expectedCoap ){
+    if (sn_coap_protocol_stub.expectedCoap) {
         sn_coap_protocol_stub.expectedCoap->sn_coap_protocol_free = used_free_func_ptr;
         sn_coap_protocol_stub.expectedCoap->sn_coap_protocol_malloc = used_malloc_func_ptr;
         sn_coap_protocol_stub.expectedCoap->sn_coap_rx_callback = used_rx_callback_ptr;
@@ -107,6 +107,16 @@ coap_send_msg_s *sn_coap_protocol_allocate_mem_for_msg(struct coap_s *handle, sn
 }
 
 int8_t sn_coap_protocol_delete_retransmission(struct coap_s *handle, uint16_t msg_id)
+{
+    return 0;
+}
+
+uint16_t sn_coap_protocol_get_configured_blockwise_size(struct coap_s *handle)
+{
+    return 0;
+}
+
+int8_t prepare_blockwise_message(struct coap_s *handle, sn_coap_hdr_s *src_coap_msg_ptr)
 {
     return 0;
 }

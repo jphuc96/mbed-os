@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 
-#ifndef MBED_CONF_APP_CONNECT_STATEMENT
+#define WIFI 2
+#if !defined(MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE) || \
+    (MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE == WIFI && !defined(MBED_CONF_NSAPI_DEFAULT_WIFI_SSID))
 #error [NOT_SUPPORTED] No network configuration found for this target.
 #endif
 
@@ -26,8 +28,6 @@
 #include "nsapi_dns.h"
 #include "EventQueue.h"
 #include "dns_tests.h"
-
-#include MBED_CONF_APP_HEADER_FILE
 
 using namespace utest::v1;
 
@@ -107,6 +107,39 @@ void do_asynchronous_gethostbyname(const char hosts[][DNS_TEST_HOST_LEN], unsign
     delete[] data;
 }
 
+void do_gethostbyname(const char hosts[][DNS_TEST_HOST_LEN], unsigned int op_count, int *exp_ok, int *exp_no_mem, int *exp_dns_failure, int *exp_timeout)
+{
+    // Verify that there is enough hosts in the host list
+    TEST_ASSERT(op_count <= MBED_CONF_APP_DNS_TEST_HOSTS_NUM)
+
+    // Reset counters
+    (*exp_ok) = 0;
+    (*exp_no_mem) = 0;
+    (*exp_dns_failure) = 0;
+    (*exp_timeout) = 0;
+
+    for (unsigned int i = 0; i < op_count; i++) {
+        SocketAddress address;
+        nsapi_error_t err = net->gethostbyname(hosts[i], &address);
+
+        TEST_ASSERT(err == NSAPI_ERROR_OK || err == NSAPI_ERROR_NO_MEMORY || err == NSAPI_ERROR_DNS_FAILURE || err == NSAPI_ERROR_TIMEOUT);
+        if (err == NSAPI_ERROR_OK) {
+            (*exp_ok)++;
+            printf("DNS: query \"%s\" => \"%s\"\n",
+                   hosts[i], address.get_ip_address());
+        } else if (err == NSAPI_ERROR_DNS_FAILURE) {
+            (*exp_dns_failure)++;
+            printf("DNS: query \"%s\" => DNS failure\n", hosts[i]);
+        } else if (err == NSAPI_ERROR_TIMEOUT) {
+            (*exp_timeout)++;
+            printf("DNS: query \"%s\" => timeout\n", hosts[i]);
+        } else if (err == NSAPI_ERROR_NO_MEMORY) {
+            (*exp_no_mem)++;
+            printf("DNS: query \"%s\" => no memory\n", hosts[i]);
+        }
+    }
+}
+
 NetworkInterface *get_interface()
 {
     return net;
@@ -116,12 +149,10 @@ static void net_bringup()
 {
     MBED_ASSERT(MBED_CONF_APP_DNS_TEST_HOSTS_NUM >= MBED_CONF_NSAPI_DNS_CACHE_SIZE && MBED_CONF_APP_DNS_TEST_HOSTS_NUM >= MBED_CONF_APP_DNS_SIMULT_QUERIES + 1);
 
-    net = MBED_CONF_APP_OBJECT_CONSTRUCTION;
-    int err =  MBED_CONF_APP_CONNECT_STATEMENT;
-    TEST_ASSERT_EQUAL(0, err);
-
-    printf("MBED: Connected to network\n");
-    printf("MBED: IP Address: %s\n", net->get_ip_address());
+    net = NetworkInterface::get_default_instance();
+    nsapi_error_t err = net->connect();
+    TEST_ASSERT_EQUAL(NSAPI_ERROR_OK, err);
+    printf("MBED: IP address is '%s'\n", net->get_ip_address());
 }
 
 // Test setup
@@ -142,10 +173,15 @@ Case cases[] = {
     Case("ASYNCHRONOUS_DNS_EXTERNAL_EVENT_QUEUE", ASYNCHRONOUS_DNS_EXTERNAL_EVENT_QUEUE),
     Case("ASYNCHRONOUS_DNS_INVALID_HOST", ASYNCHRONOUS_DNS_INVALID_HOST),
     Case("ASYNCHRONOUS_DNS_TIMEOUTS", ASYNCHRONOUS_DNS_TIMEOUTS),
+#ifdef MBED_EXTENDED_TESTS
     Case("ASYNCHRONOUS_DNS_SIMULTANEOUS_REPEAT",  ASYNCHRONOUS_DNS_SIMULTANEOUS_REPEAT),
+#endif
+    Case("SYNCHRONOUS_DNS", SYNCHRONOUS_DNS),
+    Case("SYNCHRONOUS_DNS_MULTIPLE", SYNCHRONOUS_DNS_MULTIPLE),
+    Case("SYNCHRONOUS_DNS_INVALID", SYNCHRONOUS_DNS_INVALID),
 };
 
-Specification specification(test_setup, cases);
+Specification specification(test_setup, cases, greentea_continue_handlers);
 
 int main()
 {

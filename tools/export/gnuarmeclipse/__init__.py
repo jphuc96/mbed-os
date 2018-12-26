@@ -16,7 +16,7 @@ limitations under the License.
 
 Title: GNU ARM Eclipse (http://gnuarmeclipse.github.io) exporter.
 
-Description: Creates a managed build project that can be imported by 
+Description: Creates a managed build project that can be imported by
 the GNU ARM Eclipse plug-ins.
 
 Author: Liviu Ionescu <ilg@livius.net>
@@ -64,7 +64,8 @@ POST_BINARY_WHITELIST = set([
     "TEENSY3_1Code.binary_hook",
     "MCU_NRF51Code.binary_hook",
     "LPCTargetCode.lpc_patch",
-    "LPC4088Code.binary_hook"
+    "LPC4088Code.binary_hook",
+    "PSOC6Code.complete"
 ])
 
 class GNUARMEclipse(Exporter):
@@ -76,57 +77,6 @@ class GNUARMEclipse(Exporter):
         target = TARGET_MAP[target_name]
         return apply_supported_whitelist(
             cls.TOOLCHAIN, POST_BINARY_WHITELIST, target)
-
-    # override
-    @property
-    def flags(self):
-        """Returns a dictionary of toolchain flags.
-        Keys of the dictionary are:
-        cxx_flags    - c++ flags
-        c_flags      - c flags
-        ld_flags     - linker flags
-        asm_flags    - assembler flags
-        common_flags - common options
-
-        The difference from the parent function is that it does not
-        add macro definitions, since they are passed separately.
-        """
-
-        config_header = self.toolchain.get_config_header()
-        flags = {key + "_flags": copy.deepcopy(value) for key, value
-                 in self.toolchain.flags.items()}
-        if config_header:
-            config_header = relpath(config_header,
-                                    self.resources.file_basepath[config_header])
-            flags['c_flags'] += self.toolchain.get_config_option(config_header)
-            flags['cxx_flags'] += self.toolchain.get_config_option(
-                config_header)
-        return flags
-
-    def toolchain_flags(self, toolchain):
-        """Returns a dictionary of toolchain flags.
-        Keys of the dictionary are:
-        cxx_flags    - c++ flags
-        c_flags      - c flags
-        ld_flags     - linker flags
-        asm_flags    - assembler flags
-        common_flags - common options
-
-        The difference from the above is that it takes a parameter.
-        """
-
-        # Note: use the config options from the currently selected toolchain.
-        config_header = self.toolchain.get_config_header()
-
-        flags = {key + "_flags": copy.deepcopy(value) for key, value
-                 in toolchain.flags.items()}
-        if config_header:
-            config_header = relpath(config_header,
-                                    self.resources.file_basepath[config_header])
-            header_options = self.toolchain.get_config_option(config_header)
-            flags['c_flags'] += header_options
-            flags['cxx_flags'] += header_options
-        return flags
 
     def validate_resources(self):
         if not self.resources.linker_script:
@@ -141,7 +91,9 @@ class GNUARMEclipse(Exporter):
         # TODO: use some logger to display additional info if verbose
 
         libraries = []
-        for lib in self.resources.libraries:
+        library_files = []
+        for lib in self.libraries:
+            library_files.append(self.filter_dot(lib))
             l, _ = splitext(basename(lib))
             libraries.append(l[3:])
 
@@ -229,6 +181,7 @@ class GNUARMEclipse(Exporter):
 
             opts['ld']['object_files'] = objects
             opts['ld']['user_libraries'] = libraries
+            opts['ld']['user_library_files'] = library_files
             opts['ld']['system_libraries'] = self.system_libraries
             opts['ld']['script'] = join(id.capitalize(),
                                         "linker-script-%s.ld" % id)
@@ -297,9 +250,9 @@ class GNUARMEclipse(Exporter):
         Headless build an Eclipse project.
 
         The following steps are performed:
-        - a temporary workspace is created, 
+        - a temporary workspace is created,
         - the project is imported,
-        - a clean build of all configurations is performed and 
+        - a clean build of all configurations is performed and
         - the temporary workspace is removed.
 
         The build results are in the Debug & Release folders.
@@ -402,16 +355,13 @@ class GNUARMEclipse(Exporter):
         The steps are:
         - get the list of source folders, as dirname(source_file)
         - compute the top folders (subfolders of the project folder)
-        - iterate all subfolders and add them to a tree, with all 
+        - iterate all subfolders and add them to a tree, with all
         nodes markes as 'not used'
         - iterate the source folders and mark them as 'used' in the
         tree, including all intermediate nodes
         - recurse the tree and collect all unused folders; descend
         the hierarchy only for used nodes
         """
-        source_folders = [self.filter_dot(s) for s in set(dirname(
-            src) for src in self.resources.c_sources + self.resources.cpp_sources + self.resources.s_sources)]
-
         self.excluded_folders = set(self.resources.ignored_dirs) - set(self.resources.inc_dirs)
 
 
@@ -452,8 +402,8 @@ class GNUARMEclipse(Exporter):
 
         Once identified, the options are removed from the command lines.
 
-        The options that were not identified are options that do not 
-        have CDT equivalents and will be passed in the 'Other options' 
+        The options that were not identified are options that do not
+        have CDT equivalents and will be passed in the 'Other options'
         categories.
 
         Although this process does not have a very complicated logic,

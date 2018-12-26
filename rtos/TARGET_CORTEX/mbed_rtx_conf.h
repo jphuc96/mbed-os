@@ -27,26 +27,29 @@
 /** Any access to RTX5 specific data structures used in common code should be wrapped in ifdef MBED_OS_BACKEND_RTX5 */
 #define MBED_OS_BACKEND_RTX5
 
-/** The thread's stack size can be configured by the application, if not explicitly specified it'll default to 4K */
-#ifndef MBED_CONF_APP_THREAD_STACK_SIZE
-#define MBED_CONF_APP_THREAD_STACK_SIZE 4096
-#endif
-
+#if defined(MBED_CONF_APP_THREAD_STACK_SIZE)
 #define OS_STACK_SIZE               MBED_CONF_APP_THREAD_STACK_SIZE
-
-/** The timer thread's stack size can be configured by the application, if not explicitly specified, it'll default to 768 */
-#ifndef MBED_CONF_APP_TIMER_THREAD_STACK_SIZE
-#define MBED_CONF_APP_TIMER_THREAD_STACK_SIZE   768
+#else
+#define OS_STACK_SIZE               MBED_CONF_RTOS_THREAD_STACK_SIZE
 #endif
 
+#ifdef MBED_CONF_APP_TIMER_THREAD_STACK_SIZE
 #define OS_TIMER_THREAD_STACK_SIZE  MBED_CONF_APP_TIMER_THREAD_STACK_SIZE
-
-/** The idle thread's stack size can be configured by the application, if not explicitly specified, it'll default to 512 */
-#ifndef MBED_CONF_APP_IDLE_THREAD_STACK_SIZE
-#define MBED_CONF_APP_IDLE_THREAD_STACK_SIZE    512
+#else
+#define OS_TIMER_THREAD_STACK_SIZE  MBED_CONF_RTOS_TIMER_THREAD_STACK_SIZE
 #endif
 
-#define OS_IDLE_THREAD_STACK_SIZE   MBED_CONF_APP_IDLE_THREAD_STACK_SIZE
+// Increase the idle thread stack size when tickless is enabled
+#if defined(MBED_TICKLESS) && defined(LPTICKER_DELAY_TICKS) && (LPTICKER_DELAY_TICKS > 0)
+#define EXTRA_IDLE_STACK MBED_CONF_RTOS_IDLE_THREAD_STACK_SIZE_TICKLESS_EXTRA
+#else
+#define EXTRA_IDLE_STACK 0
+#endif
+#ifdef MBED_CONF_APP_IDLE_THREAD_STACK_SIZE
+#define OS_IDLE_THREAD_STACK_SIZE   (MBED_CONF_APP_IDLE_THREAD_STACK_SIZE + EXTRA_IDLE_STACK)
+#else
+#define OS_IDLE_THREAD_STACK_SIZE   (MBED_CONF_RTOS_IDLE_THREAD_STACK_SIZE + EXTRA_IDLE_STACK)
+#endif
 
 #define OS_DYNAMIC_MEM_SIZE         0
 
@@ -62,10 +65,6 @@
 #define OS_STACK_WATERMARK          1
 #endif
 
-/* Run threads unprivileged when uVisor is enabled. */
-#if defined(FEATURE_UVISOR) && defined(TARGET_UVISOR_SUPPORTED)
-# define OS_PRIVILEGE_MODE           0
-#endif
 
 #define OS_IDLE_THREAD_TZ_MOD_ID     1
 #define OS_TIMER_THREAD_TZ_MOD_ID    1
@@ -74,9 +73,11 @@
 // Don't adopt default multi-thread support for ARM/ARMC6 toolchains from RTX code base.
 // Provide Mbed-specific instead.
 #define RTX_NO_MULTITHREAD_CLIB
+// LIBSPACE default value set for ARMCC
+#define OS_THREAD_LIBSPACE_NUM      4
 
-#define OS_IDLE_THREAD_NAME         "idle_thread"
-#define OS_TIMER_THREAD_NAME        "timer_thread"
+#define OS_IDLE_THREAD_NAME         "rtx_idle"
+#define OS_TIMER_THREAD_NAME        "rtx_timer"
 
 /* Enable only the evr events we use in Mbed-OS to save flash space. */
 //Following events are used by Mbed-OS, DO NOT disable them
@@ -99,7 +100,7 @@
 #define EVR_RTX_MEMORY_BLOCK_ALLOC_DISABLE
 #define EVR_RTX_MEMORY_BLOCK_FREE_DISABLE
 #define EVR_RTX_KERNEL_INITIALIZE_DISABLE
-#define EVR_RTX_KERNEL_INITIALIZE_COMPLETED_DISABLE
+#define EVR_RTX_KERNEL_INITIALIZED_DISABLE
 #define EVR_RTX_KERNEL_GET_INFO_DISABLE
 #define EVR_RTX_KERNEL_INFO_RETRIEVED_DISABLE
 #define EVR_RTX_KERNEL_GET_STATE_DISABLE

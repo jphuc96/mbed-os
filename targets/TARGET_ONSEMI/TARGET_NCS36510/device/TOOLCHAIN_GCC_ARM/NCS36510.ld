@@ -53,40 +53,12 @@ MEMORY {
     {
         __vector_table = .;
         KEEP(*(.vector_table))
-        . = ALIGN(4);
+        . = ALIGN(8);
     } > VECTORS
 
-    /* ensure that uvisor bss is at the beginning of memory */
-    .uvisor.bss (NOLOAD):
-    {
-        . = ALIGN(32);
-        __uvisor_bss_start = .;
-
-        /* protected uvisor main bss */
-        . = ALIGN(32);
-        __uvisor_bss_main_start = .;
-        KEEP(*(.keep.uvisor.bss.main))
-        . = ALIGN(32);
-        __uvisor_bss_main_end = .;
-
-        /* protected uvisor secure boxes bss */
-        . = ALIGN(32);
-        __uvisor_bss_boxes_start = .;
-        KEEP(*(.keep.uvisor.bss.boxes))
-        . = ALIGN(32);
-        __uvisor_bss_boxes_end = .;
-
-        . = ALIGN(32);
-        __uvisor_bss_end = .;
-    } > RAM
 
 .text :
     {
-        /* uVisor code and data */
-        . = ALIGN(4);
-        __uvisor_main_start = .;
-        *(.uvisor.main)
-        __uvisor_main_end = .;
 
         *(.text*)
 
@@ -132,20 +104,20 @@ MEMORY {
         *(vtable)
         *(.data*)
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* preinit data */
         PROVIDE_HIDDEN (__preinit_array_start = .);
         KEEP(*(.preinit_array))
         PROVIDE_HIDDEN (__preinit_array_end = .);
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* init data */
         PROVIDE_HIDDEN (__init_array_start = .);
         KEEP(*(SORT(.init_array.*)))
         KEEP(*(.init_array))
         PROVIDE_HIDDEN (__init_array_end = .);
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* finit data */
         PROVIDE_HIDDEN (__fini_array_start = .);
         KEEP(*(SORT(.fini_array.*)))
@@ -158,39 +130,6 @@ MEMORY {
 
     } >RAM AT>FLASH
 
-    /* uvisor configuration data */
-.uvisor.secure :
-    {
-        . = ALIGN(32);
-        __uvisor_secure_start = .;
-
-        /* uvisor secure boxes configuration tables */
-        . = ALIGN(32);
-        __uvisor_cfgtbl_start = .;
-        KEEP(*(.keep.uvisor.cfgtbl))
-        . = ALIGN(32);
-        __uvisor_cfgtbl_end = .;
-
-        /* pointers to uvisor secure boxes configuration tables */
-        /* note: no further alignment here, we need to have the exact list of pointers */
-        __uvisor_cfgtbl_ptr_start = .;
-        KEEP(*(.keep.uvisor.cfgtbl_ptr_first))
-        KEEP(*(.keep.uvisor.cfgtbl_ptr))
-        __uvisor_cfgtbl_ptr_end = .;
-
-        /* the following symbols are kept for backward compatibility and will be soon
-         * deprecated; applications actively using uVisor (__uvisor_mode == UVISOR_ENABLED)
-         * will need to use uVisor 0.8.x or above, or the security assetions will halt the
-         * system */
-        /************************/
-        __uvisor_data_src = .;
-        __uvisor_data_start = .;
-        __uvisor_data_end = .;
-        /************************/
-
-        . = ALIGN(32);
-        __uvisor_secure_end = .;
-    } >FLASH
 
     .uninitialized (NOLOAD):
     {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, Arm Limited and affiliates.
+ * Copyright (c) 2014-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,6 +45,7 @@ typedef enum {
     PHY_LINK_TX_SUCCESS,        /**< MAC TX complete. MAC will a make decision to enter wait ACK or TX done state. */
     PHY_LINK_TX_FAIL,           /**< Link TX process fail. */
     PHY_LINK_CCA_FAIL,          /**< RF link CCA process fail. */
+    PHY_LINK_CCA_PREPARE,       /**< RX Tx timeout prepare operation like channel switch to Tx channel from Receive one If operation fail must return not zero*/
 } phy_link_tx_status_e;
 
 /** Extension types */
@@ -56,6 +57,13 @@ typedef enum {
     PHY_EXTENSION_READ_LINK_STATUS, /**< Net library could read link status. */
     PHY_EXTENSION_CONVERT_SIGNAL_INFO, /**< Convert signal info. */
     PHY_EXTENSION_ACCEPT_ANY_BEACON, /**< Set boolean true or false for accept beacon from other Pan-ID than configured. Default value should be false */
+    PHY_EXTENSION_SET_TX_TIME,  /**< Net library sets transmission time based on global time stamp. Max. 65ms from setting to TX. If TX time is set to zero, it should be ignored.*/
+    PHY_EXTENSION_READ_RX_TIME, /**< Read the time of last reception based on global micro seconds time stamp. */
+    PHY_EXTENSION_READ_TX_FINNISH_TIME, /**< Read the time of last finished TX micro seconds based on global time stamp. */
+    PHY_EXTENSION_DYNAMIC_RF_SUPPORTED, /**< Read status for support Radio driver support for set TX time, CCA and Timestamp read. Also PHY_LINK_CCA_PREPARE tx status must be supported also*/
+    PHY_EXTENSION_GET_TIMESTAMP, /**<  Read 32-bit constant monotonic time stamp in us */
+    PHY_EXTENSION_SET_CSMA_PARAMETERS, /**< CSMA parameter's are given by phy_csma_params_t structure remember type cast uint8_t pointer to structure type*/
+    PHY_EXTENSION_GET_SYMBOLS_PER_SECOND, /**<  Read Symbols per seconds which will help to convert symbol time to real time  */
 } phy_extension_type_e;
 
 /** Address types */
@@ -110,9 +118,14 @@ typedef struct phy_signal_info_s {
     uint16_t result;                /**< Resulting signal information. */
 } phy_signal_info_s;
 
+/** CSMA-CA parameters */
+typedef struct phy_csma_params {
+    uint32_t backoff_time;           /**< CSMA Backoff us time before start CCA & TX. 0 should disable current backoff*/
+    bool cca_enabled;                /**< True will affect CCA check false start TX direct after backoff */
+} phy_csma_params_t;
+
 /** PHY modulation scheme */
-typedef enum phy_modulation_e
-{
+typedef enum phy_modulation_e {
     M_OFDM,     ///< QFDM
     M_OQPSK,    ///< OQPSK
     M_BPSK,     ///< BPSK
@@ -121,8 +134,7 @@ typedef enum phy_modulation_e
 } phy_modulation_e;
 
 /** Channel page numbers */
-typedef enum
-{
+typedef enum {
     CHANNEL_PAGE_0 = 0,     ///< Page 0
     CHANNEL_PAGE_1 = 1,     ///< Page 1
     CHANNEL_PAGE_2 = 2,     ///< Page 2
@@ -135,8 +147,7 @@ typedef enum
 } channel_page_e;
 
 /** Channel configuration */
-typedef struct phy_rf_channel_configuration_s
-{
+typedef struct phy_rf_channel_configuration_s {
     uint32_t channel_0_center_frequency;    ///< Center frequency
     uint32_t channel_spacing;               ///< Channel spacing
     uint32_t datarate;                      ///< Data rate
@@ -145,8 +156,7 @@ typedef struct phy_rf_channel_configuration_s
 } phy_rf_channel_configuration_s;
 
 /** Channel page configuration */
-typedef struct phy_device_channel_page_s
-{
+typedef struct phy_device_channel_page_s {
     channel_page_e channel_page;            ///< Channel page
     const phy_rf_channel_configuration_s *rf_channel_configuration; ///< Pointer to channel configuration
 } phy_device_channel_page_s;
@@ -188,7 +198,7 @@ typedef int8_t arm_net_phy_tx_done_fn(int8_t driver_id, uint8_t tx_handle, phy_l
  * @param driver_id ID of driver which received data
  * @return 0 if success, error otherwise
  */
-typedef int8_t arm_net_virtual_rx_fn(const uint8_t *data_ptr, uint16_t data_len,int8_t driver_id);
+typedef int8_t arm_net_virtual_rx_fn(const uint8_t *data_ptr, uint16_t data_len, int8_t driver_id);
 
 /**
  * @brief arm_net_virtual_tx TX callback set by serial MAC. Used to send data.
@@ -196,7 +206,7 @@ typedef int8_t arm_net_virtual_rx_fn(const uint8_t *data_ptr, uint16_t data_len,
  * @param driver_id Id of the driver to be used.
  * @return 0 if success, error otherwise
  */
-typedef int8_t arm_net_virtual_tx_fn(const virtual_data_req_t *data_req,int8_t driver_id);
+typedef int8_t arm_net_virtual_tx_fn(const virtual_data_req_t *data_req, int8_t driver_id);
 
 /**
  * @brief arm_net_virtual_config Configuration receive callback set by upper layer. Used to receive internal configuration parameters.
@@ -226,8 +236,7 @@ typedef int8_t arm_net_virtual_config_tx_fn(int8_t driver_id, const uint8_t *dat
 typedef int8_t arm_net_virtual_confirmation_rx_fn(int8_t driver_id, const uint8_t *data, uint16_t length);
 
 /** Device driver structure */
-typedef struct phy_device_driver_s
-{
+typedef struct phy_device_driver_s {
     phy_link_type_e link_type;                                      /**< Define driver types. */
     driver_data_request_e data_request_layer;                       /**< Define interface data OUT protocol. */
     uint8_t *PHY_MAC;                                               /**< Pointer to 64-bit or 48-bit MAC address. */
@@ -237,7 +246,7 @@ typedef struct phy_device_driver_s
     uint8_t phy_header_length;                                      /**< Define PHY driver needed header length before PDU. */
     int8_t (*state_control)(phy_interface_state_e, uint8_t);        /**< Function pointer for control PHY driver state. */
     int8_t (*tx)(uint8_t *, uint16_t, uint8_t, data_protocol_e);    /**< Function pointer for PHY driver write operation. */
-    int8_t (*address_write)(phy_address_type_e , uint8_t *);        /**< Function pointer for PHY driver address write. */
+    int8_t (*address_write)(phy_address_type_e, uint8_t *);         /**< Function pointer for PHY driver address write. */
     int8_t (*extension)(phy_extension_type_e, uint8_t *);           /**< Function pointer for PHY driver extension control. */
     const phy_device_channel_page_s *phy_channel_pages;             /**< Pointer to channel page list */
 

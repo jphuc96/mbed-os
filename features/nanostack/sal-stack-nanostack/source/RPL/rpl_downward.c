@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017, Arm Limited and affiliates.
+ * Copyright (c) 2015-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,6 +88,7 @@
 #include "randLIB.h"
 #include "ip6string.h"
 
+#include "Common_Protocols/icmpv6.h"
 #include "NWK_INTERFACE/Include/protocol.h"
 #include "ipv6_stack/ipv6_routing_table.h"
 
@@ -210,7 +211,7 @@ void rpl_downward_process_dao_parent_changes(rpl_instance_t *instance)
     uint8_t bits_added = 0;
     ns_list_foreach(rpl_neighbour_t, neighbour, &instance->candidate_neighbours) {
         if (neighbour->old_dao_path_control != neighbour->dao_path_control) {
-            if (neighbour->old_dao_path_control &~ neighbour->dao_path_control) {
+            if (neighbour->old_dao_path_control & ~ neighbour->dao_path_control) {
                 bits_removed = true;
                 break;
             } else {
@@ -242,6 +243,8 @@ void rpl_downward_process_dao_parent_changes(rpl_instance_t *instance)
                 }
             }
         }
+        //GENERATE PARENT Update event
+        rpl_control_event(instance->domain, RPL_EVENT_DAO_PARENT_SWITCH);
         rpl_instance_dao_trigger(instance, 0);
     }
 }
@@ -253,7 +256,7 @@ rpl_dao_target_t *rpl_create_dao_target(rpl_instance_t *instance, const uint8_t 
         tr_warn("RPL DAO overflow (target=%s)", trace_ipv6_prefix(prefix, prefix_len));
         return NULL;
     }
-    memset(target, 0, sizeof *target);
+    memset(target, 0, sizeof * target);
     bitcopy0(target->prefix, prefix, prefix_len);
     target->instance = instance;
     target->prefix_len = prefix_len;
@@ -282,13 +285,13 @@ void rpl_delete_dao_target(rpl_instance_t *instance, rpl_dao_target_t *target)
     if (target->root) {
         ns_list_foreach_safe(rpl_dao_root_transit_t, transit, &target->info.root.transits) {
             ns_list_remove(&target->info.root.transits, transit);
-            rpl_free(transit, sizeof *transit);
+            rpl_free(transit, sizeof * transit);
         }
         ipv6_route_table_remove_info(-1, ROUTE_RPL_DAO_SR, target);
         rpl_downward_topo_sort_invalidate(target->instance);
     }
 #endif
-    rpl_free(target, sizeof *target);
+    rpl_free(target, sizeof * target);
 }
 
 rpl_dao_target_t *rpl_instance_lookup_published_dao_target(rpl_instance_t *instance, const uint8_t *prefix, uint8_t prefix_len)
@@ -486,7 +489,7 @@ retry:
         }
 
         /* Check if this target has any unassigned path control bits */
-        uint8_t unassigned_pc = target->path_control & ~(target->info.non_root.pc_assigned|target->info.non_root.pc_assigning|target->info.non_root.pc_to_retry);
+        uint8_t unassigned_pc = target->path_control & ~(target->info.non_root.pc_assigned | target->info.non_root.pc_assigning | target->info.non_root.pc_to_retry);
         if (!unassigned_pc) {
             continue;
         }
@@ -579,6 +582,61 @@ static void rpl_downward_reset_assigning(rpl_instance_t *instance, uint8_t pcs_m
     }
 }
 
+
+void rpl_instance_send_address_registration(protocol_interface_info_entry_t *interface, rpl_instance_t *instance, if_address_entry_t *addr)
+{
+    aro_t aro;
+    buffer_t *buf;
+
+    aro.status = ARO_SUCCESS;
+    aro.present = true;
+    aro.lifetime = addr->valid_lifetime;
+    memcpy(aro.eui64, interface->mac, 8);
+
+    // go through neighbour list, and send to all assigned parents.
+    ns_list_foreach(rpl_neighbour_t, neighbour, &instance->candidate_neighbours) {
+        if (neighbour->dao_path_control) {
+            tr_debug("Send ARO %s to %s", trace_ipv6(addr->address), trace_ipv6(neighbour->ll_address));
+            buf = icmpv6_build_ns(interface, neighbour->ll_address, addr->address, true, false, &aro);
+            addr->addr_reg_pend |= neighbour->dao_path_control;
+            protocol_push(buf);
+        } else {
+            tr_debug("Skip ARO to %s - no pc", trace_ipv6(neighbour->ll_address));
+        }
+    }
+}
+
+bool rpl_instance_address_registration_done(protocol_interface_info_entry_t *interface, rpl_instance_t *instance, if_address_entry_t *addr, uint8_t status)
+{
+    ns_list_foreach(rpl_neighbour_t, neighbour, &instance->candidate_neighbours) {
+        // Check path control mask
+        if (!(addr->addr_reg_pend & neighbour->dao_path_control)) {
+            continue;
+        }
+
+        tr_debug("Address %s register to %s", trace_ipv6(addr->address), trace_ipv6(neighbour->ll_address));
+
+        /* Clear pending flag */
+        addr->addr_reg_pend &= ~neighbour->dao_path_control;
+
+        if (status == SOCKET_TX_DONE) {
+            addr->addr_reg_done |= neighbour->dao_path_control;
+            /* State_timer is 1/10 s. Set renewal to 75-85% of lifetime */
+            addr->state_timer = (addr->preferred_lifetime * randLIB_get_random_in_range(75, 85) / 10);
+        } else {
+            tr_error("Address registration failed");
+        }
+
+        /* If that was last one to reply, send next one. */
+        if (!addr->addr_reg_pend) {
+            rpl_control_register_address(interface, NULL);
+        }
+
+        return true;
+    }
+
+    return false;
+}
 
 /* We are optimised for sending updates to existing targets to current parents;
  * we track the state of what information DAO parents have, and manage the
@@ -773,7 +831,7 @@ void rpl_instance_send_dao_update(rpl_instance_t *instance)
     } else {
         instance->dao_retry_timer = 0xffff;
     }
-    tr_info("DAO tx %u seq attempts %u retry-timer %u", instance->dao_sequence_in_transit,instance->dao_attempt, instance->dao_retry_timer);
+    tr_info("DAO tx %u seq attempts %u retry-timer %u", instance->dao_sequence_in_transit, instance->dao_attempt, instance->dao_retry_timer);
 }
 
 #if 0
@@ -800,7 +858,7 @@ void rpl_instance_send_dao_no_path(rpl_instance_t *instance, rpl_dao_target_t *t
         ptr += 16;
     }
     ptr = rpl_downward_write_target(ptr, target);
-    ptr = rpl_downward_write_transit(ptr, target, path_control?, NULL, false);
+    ptr = rpl_downward_write_transit(ptr, target, path_control ?, NULL, false);
     memcpy(buf + base_size, ptr, opts_size);
     const uint8_t *dst;
     if (storing) {
@@ -870,7 +928,7 @@ out:
 static rpl_dao_target_t *rpl_downward_delete_root_transit(rpl_dao_target_t *target, rpl_dao_root_transit_t *transit)
 {
     ns_list_remove(&target->info.root.transits, transit);
-    rpl_free(transit, sizeof *transit);
+    rpl_free(transit, sizeof * transit);
     if (ns_list_is_empty(&target->info.root.transits)) {
         rpl_delete_dao_target(target->instance, target);
         return NULL;
@@ -943,8 +1001,7 @@ static bool rpl_downward_process_targets_for_transit(rpl_dodag_t *dodag, bool st
     rpl_dao_target_t *last_target = NULL;
     while (target_start < target_end) {
         switch (target_start[0]) {
-            case RPL_TARGET_OPTION:
-            {
+            case RPL_TARGET_OPTION: {
                 last_target = NULL;
                 uint8_t prefix_len = target_start[3];
                 if (prefix_len > 128 || prefix_len > (target_start[1] - 2) * 8) {
@@ -987,7 +1044,7 @@ static bool rpl_downward_process_targets_for_transit(rpl_dodag_t *dodag, bool st
                     bool accept;
                     if (storing) {
                         /* For storing, follow the letter of spec. Can't afford for old route propagation to happen. */
-                        accept = seq_cmp & (RPL_CMP_GREATER|RPL_CMP_EQUAL);
+                        accept = seq_cmp & (RPL_CMP_GREATER | RPL_CMP_EQUAL);
                     } else {
                         /* Lollipop counters don't necessarily work brilliantly after reboot - the path
                          * sequence causes more problems than it solves for non-storing modes, where it's
@@ -1006,7 +1063,7 @@ static bool rpl_downward_process_targets_for_transit(rpl_dodag_t *dodag, bool st
                             accept = true;
                             target->lifetime = lifetime;
                         } else {
-                            accept = seq_cmp & (RPL_CMP_GREATER|RPL_CMP_EQUAL);
+                            accept = seq_cmp & (RPL_CMP_GREATER | RPL_CMP_EQUAL);
                         }
                     }
                     if (!accept) {
@@ -1018,7 +1075,7 @@ static bool rpl_downward_process_targets_for_transit(rpl_dodag_t *dodag, bool st
                         if (target->root) {
                             ns_list_foreach_safe(rpl_dao_root_transit_t, transit, &target->info.root.transits) {
                                 ns_list_remove(&target->info.root.transits, transit);
-                                rpl_free(transit, sizeof *transit);
+                                rpl_free(transit, sizeof * transit);
                             }
                         }
                         if (storing) {
@@ -1040,7 +1097,7 @@ static bool rpl_downward_process_targets_for_transit(rpl_dodag_t *dodag, bool st
 
                 /* No-Paths don't reach here - we break out above */
                 if (target) {
-                    if (path_control &~ target->path_control) {
+                    if (path_control & ~ target->path_control) {
                         target->path_control |= path_control;
                         *new_info = true;
                     }
@@ -1135,7 +1192,7 @@ static void rpl_downward_link_transits_to_targets(rpl_instance_t *instance)
                     ns_list_add_to_end(&transit->parent->info.root.children, transit);
                 }
             }
-         }
+        }
     }
 }
 
@@ -1219,7 +1276,7 @@ static void rpl_downward_topo_sort_break_loop(rpl_dao_target_list_t *graph, rpl_
             } else if (kill_transit->cost > transit->cost) {
                 continue;
             }
-        kill_candidate:
+kill_candidate:
             kill_transit = transit;
         }
     }
@@ -1253,7 +1310,8 @@ static void rpl_downward_topo_sort(rpl_instance_t *instance)
         }
     }
 
-retry_after_loop_break:;
+retry_after_loop_break:
+    ;
     /* Run the sort - targets are pulled off 'instance->dao_targets', and placed onto 'sorted' */
 
     rpl_dao_target_t *target;
@@ -1449,7 +1507,7 @@ void rpl_instance_dao_acked(rpl_instance_t *instance, const uint8_t src[16], int
     }
 
     rpl_dodag_t *dodag = rpl_instance_current_dodag(instance);
-    const rpl_dodag_conf_t *conf = dodag? rpl_dodag_get_config(dodag) : NULL;
+    const rpl_dodag_conf_t *conf = dodag ? rpl_dodag_get_config(dodag) : NULL;
     instance->dao_in_transit = false;
     instance->dao_retry_timer = 0;
     if (!retry) {
@@ -1607,12 +1665,12 @@ void rpl_downward_print_instance(rpl_instance_t *instance, route_print_fn_t *pri
 #ifdef HAVE_RPL_ROOT
         if (target->root) {
             print_fn("  %-40s %02x seq=%d%s cost=%"PRIu32"%s%s%s",
-                       str_buf,
-                       target->path_control, target->path_sequence, target->need_seq_inc ? "+" : "",
-                       target->info.root.cost,
-                       target->published ? " (pub)" : "",
-                       target->external ? " (E)" : "",
-                       target->connected ? "" : " (disconnected)");
+                     str_buf,
+                     target->path_control, target->path_sequence, target->need_seq_inc ? "+" : "",
+                     target->info.root.cost,
+                     target->published ? " (pub)" : "",
+                     target->external ? " (E)" : "",
+                     target->connected ? "" : " (disconnected)");
             ns_list_foreach(rpl_dao_root_transit_t, transit, &target->info.root.transits) {
                 // Reuse str_buf as it's no longer needed and it's large enough for ROUTE_PRINT_ADDR_STR_FORMAT.
                 print_fn("    ->%-36s %02x cost=%"PRIu16, ROUTE_PRINT_ADDR_STR_FORMAT(str_buf, transit->transit), transit->path_control, transit->cost);
@@ -1621,10 +1679,10 @@ void rpl_downward_print_instance(rpl_instance_t *instance, route_print_fn_t *pri
 #endif
         {
             print_fn("  %-40s %02x seq=%d%s%s%s",
-                       str_buf,
-                       target->path_control, target->path_sequence, target->need_seq_inc ? "+" : "",
-                       target->published ? " (pub)" : "",
-                       target->external ? " (E)" : "");
+                     str_buf,
+                     target->path_control, target->path_sequence, target->need_seq_inc ? "+" : "",
+                     target->published ? " (pub)" : "",
+                     target->external ? " (E)" : "");
         }
     }
 }

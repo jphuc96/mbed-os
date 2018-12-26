@@ -24,7 +24,12 @@
 #endif
 
 #if !DEVICE_USTICKER
-  #error [NOT_SUPPORTED] test not supported
+#error [NOT_SUPPORTED] test not supported
+#endif
+
+//FastModels not support time drifting test
+#if defined(__ARM_FM)
+#error [NOT_SUPPORTED] test not supported
 #endif
 
 using utest::v1::Case;
@@ -43,7 +48,7 @@ static const int test_timeout = 40;
 void update_tick_thread(Mutex *mutex)
 {
     while (true) {
-        Thread::wait(1);
+        ThisThread::sleep_for(1);
         mutex->lock();
         ++elapsed_time_ms;
         mutex->unlock();
@@ -51,7 +56,7 @@ void update_tick_thread(Mutex *mutex)
 }
 
 
-/** Tests is to measure the accuracy of Thread::wait() over a period of time
+/** Tests is to measure the accuracy of ThisThread::sleep_for() over a period of time
 
     Given
         a thread updating elapsed_time_ms every milli sec
@@ -100,11 +105,11 @@ void test(void)
     //get the results from host
     greentea_parse_kv(_key, _value, sizeof(_key), sizeof(_value));
 
-    TEST_ASSERT_EQUAL_STRING_MESSAGE("pass", _key,"Host side script reported a fail...");
+    TEST_ASSERT_EQUAL_STRING_MESSAGE("pass", _key, "Host side script reported a fail...");
 }
 
 Case cases[] = {
-    Case("Test Thread::wait accuracy", test)
+    Case("Test ThisThread::sleep_for accuracy", test)
 };
 
 utest::v1::status_t greentea_test_setup(const size_t number_of_cases)

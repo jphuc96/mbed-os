@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, Arm Limited and affiliates.
+ * Copyright (c) 2014-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -52,6 +52,7 @@
 #include "6LoWPAN/Thread/thread_routing.h"
 #include "6LoWPAN/Thread/thread_leader_service.h"
 #include "6LoWPAN/MAC/mac_helper.h"
+#include "Service_Libs/mac_neighbor_table/mac_neighbor_table.h"
 
 #define TRACE_GROUP "trou"
 
@@ -183,7 +184,7 @@ static inline thread_link_quality_e thread_quality_combine(thread_link_quality_e
 /* Return the quality (worse of incoming and outgoing quality) for a neighbour router */
 static inline thread_link_quality_e thread_neighbour_router_quality(const thread_router_link_t *neighbour)
 {
-    return thread_quality_combine(neighbour->incoming_quality, neighbour->outgoing_quality);
+    return thread_quality_combine((thread_link_quality_e) neighbour->incoming_quality, (thread_link_quality_e) neighbour->outgoing_quality);
 }
 
 
@@ -265,8 +266,8 @@ static int_fast8_t thread_route_fn(
     uint16_t dest_router_addr = thread_router_addr_from_addr(dest);
     if (dest_router_addr == mac16) {
         /* We're this device's parent - transmit direct to it */
-        mle_neigh_table_entry_t *entry = mle_class_get_by_link_address(cur->id, dest_addr, ADDR_802_15_4_SHORT);
-        if (!entry || (entry->mode & MLE_DEV_MASK) == MLE_RFD_DEV) {
+        mac_neighbor_table_entry_t *entry = mac_neighbor_table_address_discover(mac_neighbor_info(cur), dest_addr, ADDR_802_15_4_SHORT);
+        if (!entry || !entry->ffd_device) {
             /* To cover some of draft-kelsey-thread-network-data-00, we send the
              * packet up to our own IP layer in the case where it's addressed to
              * an unrecognised child. The special IP forwarding rules can then
@@ -514,8 +515,8 @@ void thread_routing_force_next_hop(protocol_interface_info_entry_t *cur, uint8_t
  */
 
 static thread_router_link_t *thread_routing_update_link_margin_internal(thread_info_t *thread,
-        uint16_t sender,
-        uint8_t link_margin_db)
+                                                                        uint16_t sender,
+                                                                        uint8_t link_margin_db)
 {
     thread_router_id_t sender_id = thread_router_id_from_addr(sender);
 
@@ -545,9 +546,9 @@ static thread_router_link_t *thread_routing_update_link_margin_internal(thread_i
 }
 
 int_fast8_t thread_routing_update_link_margin(protocol_interface_info_entry_t *cur,
-        uint16_t sender,
-        uint8_t link_margin_db,
-        uint8_t outgoing_link_margin_db)
+                                              uint16_t sender,
+                                              uint8_t link_margin_db,
+                                              uint8_t outgoing_link_margin_db)
 {
     thread_info_t *thread = cur->thread_info;
     /* Sanity check that the source is a Thread router */
@@ -581,8 +582,8 @@ int_fast8_t thread_routing_update_link_margin(protocol_interface_info_entry_t *c
 }
 
 int_fast8_t thread_routing_force_link_margin(protocol_interface_info_entry_t *cur,
-        uint16_t addr,
-        uint8_t link_margin_db)
+                                             uint16_t addr,
+                                             uint8_t link_margin_db)
 {
     thread_info_t *thread = cur->thread_info;
     if (!thread || !cur->mac_parameters || !thread_is_router_addr(addr)) {
@@ -690,8 +691,8 @@ int_fast8_t thread_routing_add_link(protocol_interface_info_entry_t *cur,
         if (our_quality_to_other_neighbour < QUALITY_10dB) {
             continue;
         }
-        thread_link_quality_e neighbours_incoming_quality_to_other_neighbour = (byte & ROUTE_DATA_IN_MASK) >> ROUTE_DATA_IN_SHIFT;
-        thread_link_quality_e neighbours_outgoing_quality_to_other_neighbour = (byte & ROUTE_DATA_OUT_MASK) >> ROUTE_DATA_OUT_SHIFT;
+        thread_link_quality_e neighbours_incoming_quality_to_other_neighbour = (thread_link_quality_e)((byte & ROUTE_DATA_IN_MASK) >> ROUTE_DATA_IN_SHIFT);
+        thread_link_quality_e neighbours_outgoing_quality_to_other_neighbour = (thread_link_quality_e)((byte & ROUTE_DATA_OUT_MASK) >> ROUTE_DATA_OUT_SHIFT);
         thread_link_quality_e neighbours_quality_to_other_neighbour = thread_quality_combine(neighbours_incoming_quality_to_other_neighbour,
                                                                                              neighbours_outgoing_quality_to_other_neighbour);
         if (neighbours_quality_to_other_neighbour < our_quality_to_other_neighbour) {
@@ -821,16 +822,16 @@ uint8_t thread_routing_get_route_data_size(protocol_interface_info_entry_t *cur)
     return len;
 }
 
-uint_fast8_t thread_routing_cost_get_by_router_id(thread_routing_info_t *routing , uint8_t routerId)
+uint_fast8_t thread_routing_cost_get_by_router_id(thread_routing_info_t *routing, uint8_t routerId)
 {
     return thread_compute_route_cost(routing, routerId, NULL);
 }
 
 int_fast8_t thread_routing_get_route_data(protocol_interface_info_entry_t *cur,
-        uint8_t *id_seq,
-        uint8_t *id_mask,
-        uint8_t *data,
-        uint8_t *len_out)
+                                          uint8_t *id_seq,
+                                          uint8_t *id_mask,
+                                          uint8_t *data,
+                                          uint8_t *len_out)
 {
     uint8_t len = 0;
     thread_info_t *thread = cur->thread_info;
@@ -971,7 +972,22 @@ static void thread_trickle_accelerate(trickle_t *t, const trickle_params_t *para
     }
     if (t->now > t->t) {
         // if now is larger than t move t to trigger event again during this period
-        t->t = t->now + randLIB_get_random_in_range(0, params->Imin/2);
+        t->t = t->now + randLIB_get_random_in_range(0, params->Imin / 2);
+    }
+}
+
+void thread_routing_trickle_advance(thread_routing_info_t *routing, uint16_t ticks)
+{
+    trickle_t *t = &routing->mle_advert_timer;
+
+    if (!trickle_running(t, &thread_mle_advert_trickle_params)) {
+        return;
+    }
+
+    if ((t->t > t->now) && (t->t - t->now < ticks)) {
+        /* advance trickle elapsing time by number of ticks */
+        t->t = t->t + ticks - (t->t - t->now);
+        tr_debug("trickle advanced to %d, now %d ", t->t, t->now);
     }
 }
 
@@ -987,11 +1003,11 @@ void thread_routing_leader_connection_validate(thread_info_t *thread, uint16_t d
     if (disconnect_period < NETWORK_ID_SPEEDUP) {
         return;
     }
-    if (disconnect_period > NETWORK_ID_SPEEDUP_MAX ) {
-        tr_debug("Leader restored:accelerate reset: %d",disconnect_period);
+    if (disconnect_period > NETWORK_ID_SPEEDUP_MAX) {
+        tr_debug("Leader restored:accelerate reset: %d", disconnect_period);
         trickle_inconsistent_heard(&routing->mle_advert_timer, &thread_mle_advert_trickle_params);
     } else {
-        tr_debug("Leader restored:accelerate: %d",disconnect_period);
+        tr_debug("Leader restored:accelerate: %d", disconnect_period);
         thread_trickle_accelerate(&routing->mle_advert_timer, &thread_mle_advert_trickle_params, 100);// 10 second with 100ms tics
     }
 }

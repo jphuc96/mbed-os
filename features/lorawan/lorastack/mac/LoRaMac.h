@@ -42,7 +42,6 @@
 
 #include "events/EventQueue.h"
 
-#include "lorastack/phy/loraphy_target.h"
 #include "lorastack/phy/LoRaPHY.h"
 
 #include "system/LoRaWANTimer.h"
@@ -79,11 +78,15 @@ public:
      *
      * @param   queue [in]        A pointer to the application provided EventQueue.
      *
+     * @param   scheduling_failure_handler    A callback to inform upper layer if a deferred
+     *                                        transmission (after backoff or retry) fails to schedule.
+     *
      * @return  `lorawan_status_t` The status of the operation. The possible values are:
      *          \ref LORAWAN_STATUS_OK
      *          \ref LORAWAN_STATUS_PARAMETER_INVALID
      */
-    lorawan_status_t initialize(events::EventQueue *queue);
+    lorawan_status_t initialize(events::EventQueue *queue,
+                                mbed::Callback<void(void)>scheduling_failure_handler);
 
     /**
      * @brief   Disconnect LoRaMac layer
@@ -94,30 +97,10 @@ public:
     void disconnect(void);
 
     /**
-     * @brief   Queries the LoRaMAC whether it is possible to send the next frame with
-     *          a given payload size. The LoRaMAC takes the scheduled MAC commands into
-     *          account and returns corresponding value.
-     *
-     * @param   size     [in]    The size of the applicable payload to be sent next.
-     *
-     * @return  Size of the biggest packet that can be sent.
-     *          Please note that if the size of the MAC commands in the queue do
-     *          not fit into the payload size on the related datarate, the LoRaMAC will
-     *          omit the MAC commands.
-     */
-    uint8_t get_max_possible_tx_size(uint8_t size);
-
-    /**
      * @brief nwk_joined Checks if device has joined to network
      * @return True if joined to network, false otherwise
      */
     bool nwk_joined();
-
-    /**
-     * @brief set_nwk_joined This is used for ABP mode for which real joining does not happen
-     * @param joined True if device has joined in network, false otherwise
-     */
-    void set_nwk_joined(bool joined);
 
     /**
      * @brief   Adds a channel plan to the system.
@@ -210,24 +193,11 @@ public:
      */
     lorawan_status_t multicast_channel_unlink(multicast_params_t *channel_param);
 
-    /** Binds radio driver to PHY layer.
+    /** Binds phy layer to MAC.
      *
-     * MAC layer is totally detached from the PHY layer so the stack layer
-     * needs to play the role of an arbitrator. This API gets a radio driver
-     * object from the application (via LoRaWANInterface), binds it to the PHY
-     * layer and initialises radio callback handles which the radio driver will
-     * use in order to report events.
-     *
-     * @param radio            LoRaRadio object, i.e., the radio driver
-     *
+     * @param phy   LoRaPHY object
      */
-    void bind_radio_driver(LoRaRadio &radio);
-
-    /**
-     * @brief Configures the events to trigger an MLME-Indication with
-     *        a MLME type of MLME_SCHEDULE_UPLINK.
-     */
-    void set_mlme_schedule_ul_indication(void);
+    void bind_phy(LoRaPHY &phy);
 
     /**
      * @brief Schedules the frame for sending.
@@ -246,37 +216,6 @@ public:
      */
     lorawan_status_t send(loramac_mhdr_t *mac_hdr, const uint8_t fport,
                           const void *fbuffer, uint16_t fbuffer_size);
-
-    /**
-     * @brief Puts the system in continuous transmission mode
-     *
-     * @remark Uses the radio parameters set on the previous transmission.
-     *
-     * @param [in] timeout    Time in seconds while the radio is kept in continuous wave mode
-     *
-     * @return status          Status of the operation. LORAWAN_STATUS_OK in case
-     *                         of success and a negative error code in case of
-     *                         failure.
-     */
-    lorawan_status_t set_tx_continuous_wave(uint16_t timeout);
-
-    /**
-     * @brief Puts the system in continuous transmission mode
-     *
-     * @param [in] timeout     Time in seconds while the radio is kept in continuous wave mode
-     * @param [in] frequency   RF frequency to be set.
-     * @param [in] power       RF output power to be set.
-     *
-     * @return status          Status of the operation. LORAWAN_STATUS_OK in case
-     *                         of success and a negative error code in case of
-     *                         failure.
-     */
-    lorawan_status_t set_tx_continuous_wave1(uint16_t timeout, uint32_t frequency, uint8_t power);
-
-    /**
-     * @brief Resets MAC specific parameters to default
-     */
-    void reset_mac_parameters(void);
 
     /**
      * @brief get_default_tx_datarate Gets the default TX datarate
@@ -324,13 +263,18 @@ public:
 
     /**
      * @brief prepare_ongoing_tx This will prepare (and override) ongoing_tx_msg.
-     * @param port The application port number.
-     * @param data A pointer to the data being sent. The ownership of the
-     *             buffer is not transferred.
-     * @param length The size of data in bytes.
-     * @param flags A flag used to determine what type of
-     *              message is being sent.
-     * @param num_retries Number of retries for a confirmed type message
+     * @param port                          The application port number.
+     *
+     * @param data                          A pointer to the data being sent. The ownership of the
+     *                                      buffer is not transferred.
+     *
+     * @param length                        The size of data in bytes.
+     *
+     * @param flags                         A flag used to determine what type of
+     *                                      message is being sent.
+     *
+     * @param num_retries                   Number of retries for a confirmed type message
+     *
      * @return The number of bytes prepared for sending.
      */
     int16_t prepare_ongoing_tx(const uint8_t port, const uint8_t *data,
@@ -351,15 +295,11 @@ public:
     /**
      * @brief set_device_class Sets active device class.
      * @param device_class Device class to use.
-     * @param ack_expiry_handler callback function to inform about ack expiry
+     * @param rx2_would_be_closure_handler callback function to inform about
+     *        would be closure of RX2 window
      */
     void set_device_class(const device_class_t &device_class,
-                          mbed::Callback<void(void)>ack_expiry_handler);
-
-    /**
-     * @brief opens a continuous RX2 window for Class C devices
-     */
-    void open_continuous_rx_window(void);
+                          mbed::Callback<void(void)>rx2_would_be_closure_handler);
 
     /**
      * @brief setup_link_check_request Adds link check request command
@@ -466,19 +406,28 @@ public:
     rx_slot_t get_current_slot(void);
 
     /**
+     * Indicates what level of QOS is set by network server. QOS level is set
+     * in response to a LinkADRReq for UNCONFIRMED messages
+     */
+    uint8_t get_QOS_level(void);
+
+    /**
+     *Indicates level of QOS used for the previous outgoing message
+     */
+    uint8_t get_prev_QOS_level(void);
+
+    /**
      * These locks trample through to the upper layers and make
      * the stack thread safe.
      */
 #if MBED_CONF_RTOS_PRESENT
     void lock(void)
     {
-        osStatus status = _mutex.lock();
-        MBED_ASSERT(status == osOK);
+        _mutex.lock();
     }
     void unlock(void)
     {
-        osStatus status = _mutex.unlock();
-        MBED_ASSERT(status == osOK);
+        _mutex.unlock();
     }
 #else
     void lock(void) { }
@@ -486,10 +435,36 @@ public:
 #endif
 
 private:
-    typedef mbed::ScopedLock<LoRaMac> Lock;
-#if MBED_CONF_RTOS_PRESENT
-    rtos::Mutex _mutex;
-#endif
+    /**
+     * @brief   Queries the LoRaMAC the maximum possible FRMPayload size to send.
+     *          The LoRaMAC takes the scheduled MAC commands into account and returns
+     *          corresponding value.
+     *
+     * @param   fopts_len     [in]    Number of mac commands in the queue pending.
+     *
+     * @return  Size of the biggest packet that can be sent.
+     *          Please note that if the size of the MAC commands in the queue do
+     *          not fit into the payload size on the related datarate, the LoRaMAC will
+     *          omit the MAC commands.
+     */
+    uint8_t get_max_possible_tx_size(uint8_t fopts_len);
+
+    /**
+     * @brief set_nwk_joined This is used for ABP mode for which real joining does not happen
+     * @param joined True if device has joined in network, false otherwise
+     */
+    void set_nwk_joined(bool joined);
+
+    /**
+     * @brief Configures the events to trigger an MLME-Indication with
+     *        a MLME type of MLME_SCHEDULE_UPLINK.
+     */
+    void set_mlme_schedule_ul_indication(void);
+
+    /**
+     * @brief Resets MAC specific parameters to default
+     */
+    void reset_mac_parameters(void);
 
     /**
      * Handles a Join Accept frame
@@ -627,6 +602,11 @@ private:
                                 float max_eirp, float antenna_gain, uint16_t timeout);
 
 private:
+    typedef mbed::ScopedLock<LoRaMac> Lock;
+#if MBED_CONF_RTOS_PRESENT
+    rtos::Mutex _mutex;
+#endif
+
     /**
      * Timer subsystem handle
      */
@@ -635,7 +615,7 @@ private:
     /**
      * LoRa PHY layer object storage
      */
-    LoRaPHY_region _lora_phy;
+    LoRaPHY *_lora_phy;
 
     /**
      * MAC command handle
@@ -664,10 +644,26 @@ private:
 
     /**
      * Class C doesn't timeout in RX2 window as it is a continuous window.
-     * We use this callback to inform the LoRaWANStack controller that the
-     * system cannot do more retries.
+     * We use this callback to inform the LoRaWANStack controller that we did
+     * not receive a downlink in a time equal to normal Class A type RX2
+     * window timeout. This marks a 'would-be' closure for RX2, actual RX2 is
+     * not closed. Mostly network servers will send right at the beginning of
+     * RX2 window if they have something to send. So if we didn't receive anything
+     * in the time period equal to would be RX2 delay (which is a function of
+     * uplink message length and data rate), we will invoke this callback to let
+     * the upper layer know.
      */
-    mbed::Callback<void(void)> _ack_expiry_handler_for_class_c;
+    mbed::Callback<void(void)> _rx2_would_be_closure_for_class_c;
+
+    /**
+     * Transmission is async, i.e., a call to schedule_tx() may be deferred to
+     * a time after a certain back off. We use this callback to inform the
+     * controller layer that a specific TX transaction failed to schedule after
+     * backoff or retry.
+     */
+    mbed::Callback<void(void)> _scheduling_failure_handler;
+
+    timer_event_t _rx2_closure_timer_for_class_c;
 
     /**
      * Structure to hold MCPS indication data.
@@ -693,139 +689,15 @@ private:
 
     bool _is_nwk_joined;
 
+    bool _can_cancel_tx;
+
     bool _continuous_rx2_window_open;
 
     device_class_t _device_class;
 
-#if defined(LORAWAN_COMPLIANCE_TEST)
-public: // Test interface
+    uint8_t _prev_qos_level;
 
-    /**
-     * @brief   Set forth an MLME request.
-     *
-     * @details The MAC layer management entity handles the management services.
-     *
-     * @param [in] request    The MLME request to perform.
-     *                        Refer to \ref loramac_mlme_req_t.
-     *
-     * @return  `lorawan_status_t` The status of the operation. The possible values are:
-     *          \ref LORAWAN_STATUS_OK
-     *          \ref LORAWAN_STATUS_BUSY
-     *          \ref LORAWAN_STATUS_SERVICE_UNKNOWN
-     *          \ref LORAWAN_STATUS_PARAMETER_INVALID
-     *          \ref LORAWAN_STATUS_NO_NETWORK_JOINED
-     *          \ref LORAWAN_STATUS_LENGTH_ERROR
-     *          \ref LORAWAN_STATUS_DEVICE_OFF
-     */
-    lorawan_status_t mlme_request(loramac_mlme_req_t *request);
-
-    /**
-     * @brief   Set forth an MCPS request.
-     *
-     * @details The MAC Common Part Sublayer handles the data services. The following
-     *          code-snippet shows how to use the API to send an unconfirmed
-     *          LoRaMAC frame.
-     *
-     * @code
-     *
-     * uint8_t buffer[] = {1, 2, 3};
-     *
-     * loramac_compliance_test_req_t request;
-     * request.type = MCPS_UNCONFIRMED;
-     * request.fport = 1;
-     * request.f_buffer = buffer;
-     * request.f_buffer_size = sizeof(buffer);
-     *
-     * if (test_request(&request) == LORAWAN_STATUS_OK) {
-     *   // Service started successfully. Waiting for the MCPS-Confirm event
-     * }
-     *
-     * @endcode
-     *
-     * @param [in] request    The test request to perform.
-     *                        Refer to \ref loramac_compliance_test_req_t.
-     *
-     * @return  `lorawan_status_t` The status of the operation. The possible values are:
-     *          \ref LORAWAN_STATUS_OK
-     *          \ref LORAWAN_STATUS_BUSY
-     *          \ref LORAWAN_STATUS_SERVICE_UNKNOWN
-     *          \ref LORAWAN_STATUS_PARAMETER_INVALID
-     *          \ref LORAWAN_STATUS_NO_NETWORK_JOINED
-     *          \ref LORAWAN_STATUS_LENGTH_ERROR
-     *          \ref LORAWAN_STATUS_DEVICE_OFF
-     */
-    lorawan_status_t test_request(loramac_compliance_test_req_t *request);
-
-    /**
-     * \brief   LoRaMAC set tx timer.
-     *
-     * \details Sets up a timer for next transmission (application specific timers).
-     *
-     * \param   [in] NextTxTime - Periodic time for next uplink.
-
-     * \retval  `lorawan_status_t` The status of the operation. The possible values are:
-     *          \ref LORAWAN_STATUS_OK
-     *          \ref LORAWAN_STATUS_PARAMETER_INVALID
-     */
-    lorawan_status_t LoRaMacSetTxTimer(uint32_t NextTxTime);
-
-    /**
-     * \brief   LoRaMAC stop tx timer.
-     *
-     * \details Stops the next tx timer.
-     *
-     * \retval  `lorawan_status_t` The status of the operation. The possible values are:
-     *          \ref LORAWAN_STATUS_OK
-     *          \ref LORAWAN_STATUS_PARAMETER_INVALID
-     */
-    lorawan_status_t LoRaMacStopTxTimer();
-
-    /**
-     * \brief   Enabled or disables the reception windows
-     *
-     * \details This is a test function. It shall be used for testing purposes only.
-     *          Changing this attribute may lead to a non-conformance LoRaMac operation.
-     *
-     * \param   [in] enable - Enabled or disables the reception windows
-     */
-    void LoRaMacTestRxWindowsOn(bool enable);
-
-    /**
-     * \brief   Enables the MIC field test
-     *
-     * \details This is a test function. It shall be used for testing purposes only.
-     *          Changing this attribute may lead to a non-conformance LoRaMac operation.
-     *
-     * \param   [in] txPacketCounter - Fixed Tx packet counter value
-     */
-    void LoRaMacTestSetMic(uint16_t txPacketCounter);
-
-    /**
-     * \brief   Enabled or disables the duty cycle
-     *
-     * \details This is a test function. It shall be used for testing purposes only.
-     *          Changing this attribute may lead to a non-conformance LoRaMac operation.
-     *
-     * \param   [in] enable - Enabled or disables the duty cycle
-     */
-    void LoRaMacTestSetDutyCycleOn(bool enable);
-
-    /**
-     * \brief   Sets the channel index
-     *
-     * \details This is a test function. It shall be used for testing purposes only.
-     *          Changing this attribute may lead to a non-conformance LoRaMac operation.
-     *
-     * \param   [in] channel - Channel index
-     */
-    void LoRaMacTestSetChannel(uint8_t channel);
-
-private:
-    /**
-     * Timer to handle the application data transmission duty cycle
-     */
-    timer_event_t tx_next_packet_timer;
-#endif
+    bool _demod_ongoing;
 };
 
 #endif // MBED_LORAWAN_MAC_H__

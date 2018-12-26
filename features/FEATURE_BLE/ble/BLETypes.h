@@ -22,6 +22,7 @@
 #include <string.h>
 #include "ble/SafeEnum.h"
 #include "ble/ArrayView.h"
+#include "ble/gap/Types.h"
 
 /**
  * @addtogroup ble
@@ -31,6 +32,43 @@
  */
 
 namespace ble {
+
+/** Special advertising set handle used for the legacy advertising set. */
+static const advertising_handle_t LEGACY_ADVERTISING_HANDLE = 0x00;
+
+/** Special advertising set handle used as return or parameter to signify an invalid handle. */
+static const advertising_handle_t INVALID_ADVERTISING_HANDLE = 0xFF;
+
+/** Maximum advertising data length that can fit in a legacy PDU. */
+static const uint8_t LEGACY_ADVERTISING_MAX_SIZE = 0x1F;
+
+/** Features supported by the controller.
+ * @see BLUETOOTH SPECIFICATION Version 5.0 | Vol 6, Part B - 4.6 */
+struct controller_supported_features_t : SafeEnum<controller_supported_features_t, uint8_t> {
+    enum type {
+        LE_ENCRYPTION = 0,
+        CONNECTION_PARAMETERS_REQUEST_PROCEDURE,
+        EXTENDED_REJECT_INDICATION,
+        SLAVE_INITIATED_FEATURES_EXCHANGE,
+        LE_PING,
+        LE_DATA_PACKET_LENGTH_EXTENSION,
+        LL_PRIVACY,
+        EXTENDED_SCANNER_FILTER_POLICIES,
+        LE_2M_PHY,
+        STABLE_MODULATION_INDEX_TRANSMITTER,
+        STABLE_MODULATION_INDEX_RECEIVER,
+        LE_CODED_PHY,
+        LE_EXTENDED_ADVERTISING,
+        LE_PERIODIC_ADVERTISING,
+        CHANNEL_SELECTION_ALGORITHM_2,
+        LE_POWER_CLASS
+    };
+
+    /**
+     * Construct a new instance of ControllerSupportedFeatures_t.
+     */
+    controller_supported_features_t(type value) : SafeEnum(value) { }
+};
 
 /**
  * Opaque reference to a connection.
@@ -47,7 +85,6 @@ typedef uintptr_t connection_handle_t;
  * Reference to an attribute in a GATT database.
  */
 typedef uint16_t attribute_handle_t;
-
 
  /**
   * Inclusive range of GATT attributes handles.
@@ -284,6 +321,10 @@ void set_all_zeros(byte_array_class &byte_array) {
     memset(&byte_array[0], 0x00, byte_array.size());
 }
 
+/**
+ * Model fixed size array values.
+ * @tparam array_size The size of the array.
+ */
 template <size_t array_size>
 struct byte_array_t {
     /**
@@ -556,7 +597,12 @@ struct peer_address_type_t :SafeEnum<peer_address_type_t, uint8_t> {
         /**
          * A Random static address used as a device identity address.
          */
-        RANDOM_STATIC_IDENTITY
+        RANDOM_STATIC_IDENTITY,
+
+        /**
+         * No address provided (anonymous advertisement).
+         */
+        ANONYMOUS = 0xFF
     };
 
     /**
@@ -570,6 +616,215 @@ struct peer_address_type_t :SafeEnum<peer_address_type_t, uint8_t> {
      */
     peer_address_type_t() :
         SafeEnum<peer_address_type_t, uint8_t>(PUBLIC) { }
+};
+
+/**
+ * Type that describes a bluetooth PHY(sical) transport.
+ */
+struct phy_t : SafeEnum<phy_t, uint8_t> {
+    /** struct scoped enum wrapped by the class */
+    enum type {
+        /**
+         * No phy selected.
+         *
+         * @note This value can be used to indicate the absence of phy
+         */
+        NONE = 0,
+
+        /**
+         * 1Mbit/s LE.
+         *
+         * @note This physical transport was available since Bluetooth 4.0
+         */
+        LE_1M = 1,
+
+        /**
+         * 2Mbit/s LE.
+         *
+         * Modulation is similar to LE_1M but differs in rate. Therefore range
+         * performances are in the same ballpark as LE_1M while the increased rate
+         * minimize time spent to transfer or receive a packet which leads to a
+         * better power consumption and/or faster transfer.
+         *
+         * @note This transport has been introduced with the Bluetooth 5.
+         * @note When operating at 2Mbit/s range is not exactly identical to the
+         * range at 1Mbit/s due to a loss in sensitivity.
+         */
+        LE_2M = 2,
+
+        /**
+         * LE Coded PHY.
+         *
+         * This transport reuse the 1Mbit/s channel with different coding schemes.
+         * Either two (S=2) or eight (S=8) symbols can be used to represent a
+         * bit while the 1Mbit/s transport use 1 symbol to code 1 bit of data.
+         *
+         * Here is the data rate of the two coding schemes:
+         *   - S=2: 500kbit/s
+         *   - S=8: 125kbit/s
+         *
+         * The goal of the coded PHY is to increase the range of BLE devices.
+         * Of course given it takes more time to transfer data, transmission
+         * and reception last longer which leads to an increase in power
+         * consumption.
+         *
+         * @note This transport has been introduced with the Bluetooth 5.
+         */
+        LE_CODED
+    };
+
+    /**
+     * Construct a new instance of phy_t.
+     */
+    phy_t(type value) :
+        SafeEnum<phy_t, uint8_t>(value) { }
+
+    explicit phy_t(uint8_t raw_value) : SafeEnum(raw_value) { }
+};
+
+/**
+ * Type that describe a set of PHY(sical) transports. This is used to
+ * indicate preference for the PHY transports set within it.
+ */
+class phy_set_t {
+public:
+    enum PhysFlags_t {
+        PHY_SET_1M    = 0x01,
+        PHY_SET_2M    = 0x02,
+        PHY_SET_CODED = 0x04
+    };
+
+    /**
+     * Create set that indicates no preference.
+     */
+    phy_set_t() : _value(0) { }
+
+    /**
+     * Create a set based on the mask specified in the Bluetooth spec.
+     *
+     * @param value Octet containing the set of preferred PHYs
+     */
+    phy_set_t(uint8_t value) : _value(value) { }
+
+    /**
+     * Create a set based on individual settings.
+     *
+     * @param phy_1m Prefer LE 1M
+     * @param phy_2m Prefer LE 2M if avaiable
+     * @param phy_coded Prefer coded modulation if avaiable
+     */
+    phy_set_t(bool phy_1m, bool phy_2m, bool phy_coded) :
+        _value()
+    {
+        set_1m(phy_1m);
+        set_2m(phy_2m);
+        set_coded(phy_coded);
+    }
+
+    /**
+     * Create a set from a single phy.
+     *
+     * @param phy The phy to add to the set.
+     */
+    phy_set_t(phy_t phy) : _value()
+    {
+        switch (phy.value()) {
+            case phy_t::LE_1M:
+                set_1m(true);
+                break;
+            case phy_t::LE_2M:
+                set_2m(true);
+                break;
+            case phy_t::LE_CODED:
+                set_coded(true);
+                break;
+            default:
+                break;
+        }
+    }
+
+    /** Prefer 1M PHY. */
+    void set_1m(bool enabled = true) {
+        if (enabled) {
+            _value |= PHY_SET_1M;
+        } else {
+            _value &= ~PHY_SET_1M;
+        }
+    }
+
+    /** Prefer 2M PHY. */
+    void set_2m(bool enabled = true) {
+        if (enabled) {
+            _value |= PHY_SET_2M;
+        } else {
+            _value &= ~PHY_SET_2M;
+        }
+    }
+
+    /** Prefer coded PHY. */
+    void set_coded(bool enabled = true) {
+        if (enabled) {
+            _value |= PHY_SET_CODED;
+        } else {
+            _value &= ~PHY_SET_CODED;
+        }
+    }
+
+    bool get_1m() const {
+        return (_value & PHY_SET_1M);
+    }
+
+    bool get_2m() const {
+        return (_value & PHY_SET_2M);
+    }
+
+    bool get_coded() const {
+        return (_value & PHY_SET_CODED);
+    }
+
+    operator uint8_t() const {
+        return _value;
+    }
+
+    uint8_t value() const {
+        return _value;
+    }
+
+    uint8_t count() const {
+        return (get_1m() ? 1 : 0) + (get_2m() ? 1 : 0) + (get_coded() ? 1 : 0);
+    }
+
+private:
+    uint8_t _value;
+};
+
+/**
+ * Type describing the number of symbols per bit in le coded PHY.
+ */
+struct coded_symbol_per_bit_t :SafeEnum<coded_symbol_per_bit_t, uint8_t> {
+    /** struct scoped enum wrapped by the class */
+    enum type {
+        /**
+         * The Number of symbol used to code a bit is undefined.
+         */
+        UNDEFINED,
+
+        /**
+         * Two symbols to code a bit.
+         */
+        S2,
+
+        /**
+         * Eight symbols to code a bit.
+         */
+        S8
+    };
+
+    /**
+     * Construct a new instance of coded_symbol_per_bit_t.
+     */
+    coded_symbol_per_bit_t(type value) :
+        SafeEnum<coded_symbol_per_bit_t, uint8_t>(value) { }
 };
 
 } // namespace ble

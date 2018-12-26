@@ -22,11 +22,11 @@
 using namespace utest::v1;
 
 #if defined(MBED_RTOS_SINGLE_THREAD)
-  #error [NOT_SUPPORTED] test not supported
+#error [NOT_SUPPORTED] test not supported
 #endif
 
 #if !DEVICE_USTICKER
-  #error [NOT_SUPPORTED] test not supported
+#error [NOT_SUPPORTED] test not supported
 #endif
 
 #define THREAD_DELAY     30
@@ -52,7 +52,7 @@ void test_thread(int const *delay)
         if (sem_lock_failed) {
             sem_defect = true;
         }
-        Thread::wait(thread_delay);
+        ThisThread::sleep_for(thread_delay);
         sem_counter--;
         change_counter++;
         two_slots.release();
@@ -123,7 +123,7 @@ void test_single_thread()
 
     res = t.start(callback(single_thread, &data));
     TEST_ASSERT_EQUAL(osOK, res);
-    Thread::wait(SHORT_WAIT);
+    ThisThread::sleep_for(SHORT_WAIT);
 
     TEST_ASSERT_EQUAL(Thread::WaitingSemaphore, t.get_state());
     TEST_ASSERT_EQUAL(0, data.data);
@@ -131,7 +131,7 @@ void test_single_thread()
     res = sem.release();
     TEST_ASSERT_EQUAL(osOK, res);
 
-    Thread::wait(SHORT_WAIT);
+    ThisThread::sleep_for(SHORT_WAIT);
 
     TEST_ASSERT_EQUAL(1, data.data);
 
@@ -160,7 +160,7 @@ void test_timeout()
     timer.start();
     res = t.start(callback(timeout_thread, &sem));
     TEST_ASSERT_EQUAL(osOK, res);
-    Thread::wait(SHORT_WAIT);
+    ThisThread::sleep_for(SHORT_WAIT);
 
     TEST_ASSERT_EQUAL(Thread::WaitingSemaphore, t.get_state());
 
@@ -204,7 +204,7 @@ void test_multiple_tokens_wait()
 {
     Semaphore sem(5);
 
-    for(int i = 5; i >= 0; i--) {
+    for (int i = 5; i >= 0; i--) {
         int32_t cnt = sem.wait(0);
         TEST_ASSERT_EQUAL(i, cnt);
     }
@@ -220,7 +220,7 @@ void test_multiple_tokens_release()
 {
     Semaphore sem(0, 5);
 
-    for(int i = 5; i > 0; i--) {
+    for (int i = 5; i > 0; i--) {
         osStatus stat = sem.release();
         TEST_ASSERT_EQUAL(osOK, stat);
     }

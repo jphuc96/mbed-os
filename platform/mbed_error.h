@@ -42,7 +42,7 @@ extern "C" {
 #else //MBED_CONF_PLATFORM_MAX_ERROR_FILENAME_LEN
 #if MBED_CONF_PLATFORM_MAX_ERROR_FILENAME_LEN > 64
 //We have to limit this to 64 bytes since we use mbed_error_printf for error reporting
-//and mbed_error_vfprintf uses 128bytes internal buffer which may not be sufficient for anything
+//and mbed_error_vprintf uses 128bytes internal buffer which may not be sufficient for anything
 //longer that 64 bytes with the current implementation.
 #error "Unsupported error filename buffer length detected, max supported length is 64 chars. Please change MBED_CONF_PLATFORM_MAX_ERROR_FILENAME_LEN or max-error-filename-len in configuration."
 #endif
@@ -86,24 +86,24 @@ extern "C" {
  \endverbatim
  *
  * The error status value range for each error type is as follows:\n
- *   Posix Error Status-es  - 0xFFFFFFFF to 0xFFFFFF01(-1 -255) - This corresponds to Posix error codes represented as negative.\n
+ *   POSIX Error Status-es  - 0xFFFFFFFF to 0xFFFFFF01(-1 -255) - This corresponds to POSIX error codes represented as negative.\n
  *   System Error Status-es - 0x80XX0100 to 0x80XX0FFF - This corresponds to System error codes range(all values are negative). Bits 23-16 will be module type(marked with XX)\n
  *   Custom Error Status-es - 0xA0XX1000 to 0xA0XXFFFF - This corresponds to Custom error codes range(all values are negative). Bits 23-16 will be module type(marked with XX)\n\n
  *
- * The ERROR CODE(values encoded into ERROR CODE bit-field in mbed_error_status_t) value range for each error type is also seperated as below:\n
- *   Posix Error Codes  - 1 to 255.\n
+ * The ERROR CODE(values encoded into ERROR CODE bit-field in mbed_error_status_t) value range for each error type is also separated as below:\n
+ *   POSIX Error Codes  - 1 to 255.\n
  *   System Error Codes - 256 to 4095.\n
  *   Custom Error Codes - 4096 to 65535.\n
  *
- * @note Posix error codes are always encoded as negative of their actual value. For example, EPERM is encoded as -EPERM.
- *       And, the MODULE TYPE for Posix error codes are always encoded as MBED_MODULE_UNKNOWN.\n
- *       This is to enable easy injection of Posix error codes into MbedOS error handling system without altering the actual Posix error values.\n
- *       Accordingly, Posix error codes are represented as -1 to -255 under MbedOS error status representation.
+ * @note POSIX error codes are always encoded as negative of their actual value. For example, EPERM is encoded as -EPERM.
+ *       And, the MODULE TYPE for POSIX error codes are always encoded as MBED_MODULE_UNKNOWN.\n
+ *       This is to enable easy injection of POSIX error codes into MbedOS error handling system without altering the actual POSIX error values.\n
+ *       Accordingly, POSIX error codes are represented as -1 to -255 under MbedOS error status representation.
  */
 typedef int mbed_error_status_t;
 
 /**
- * Macro for defining a Posix error status. This macro is mainly used to define Posix error values in mbed_error_code_t enumeration.
+ * Macro for defining a POSIX error status. This macro is mainly used to define POSIX error values in mbed_error_code_t enumeration.
  * @param  error_name       Name of the error without the ERROR_ prefix
  * @param  error_code       Error code value to be used, must be between 1 and 255(inclusive).
  *
@@ -169,8 +169,7 @@ typedef int mbed_error_status_t;
  * @param  error_status     mbed_error_status_t status to be set(See mbed_error_status_t enum above for available error status values).
  * @param  error_msg        The error message to be printed out to STDIO/Serial.
  * @param  error_value      Value associated with the error status. This would depend on error code/error scenario. Only available with MBED_ERROR1
- * @return                  0 or MBED_SUCCESS.
- *                          MBED_ERROR_INVALID_ARGUMENT if called with invalid error status/codes
+ * @return                  Does not return
  *
  * @code
  *
@@ -202,7 +201,7 @@ typedef int mbed_error_status_t;
  *      See mbed_error_status_t description for more info.\n
  *         MBED_ERROR_TYPE_SYSTEM - Used to indicate that the error status is of System defined Error type.\n
  *         MBED_ERROR_TYPE_CUSTOM - Used to indicate that the error status is of Custom defined Error type.\n
- *         MBED_ERROR_TYPE_POSIX  - Used to indicate that the error status is of Posix error type.\n
+ *         MBED_ERROR_TYPE_POSIX  - Used to indicate that the error status is of POSIX error type.\n
  *
  */
 typedef enum _mbed_error_type_t {
@@ -231,31 +230,33 @@ typedef enum _mbed_error_type_t {
  * @note
  *  \n Below are the module code mappings:\n
     \verbatim
-    MBED_MODULE_APPLICATION              0       Application
-    MBED_MODULE_PLATFORM                 1       Platform
-    MODULE_KERNEL                   2       RTX Kernel
-    MBED_MODULE_NETWORK_STACK            3       Network stack
-    MBED_MODULE_HAL                      4       HAL - Hardware Abstraction Layer
-    MBED_MODULE_NETWORK_STACKMODULE_MEMORY_SUBSYSTEM         5       Memory Subsystem
-    MBED_MODULE_FILESYSTEM               6       Filesystem
-    MBED_MODULE_BLOCK_DEVICE             7       Block device
-    MBED_MODULE_DRIVER                   8       Driver
-    MBED_MODULE_DRIVER_SERIAL            9       Serial Driver
-    MBED_MODULE_DRIVER_RTC               10      RTC Driver
-    MBED_MODULE_DRIVER_I2C               11      I2C Driver
-    MODULE_DRIVER_SPI               12      SPI Driver
-    MODULE_DRIVER_GPIO              13      GPIO Driver
-    MODULE_DRIVER_ANALOG            14      Analog Driver
-    MODULE_DRIVER_DIGITAL           15      DigitalIO Driver
-    MODULE_DRIVER_CAN               16      CAN Driver
-    MODULE_DRIVER_ETHERNET          17      Ethernet Driver
-    MODULE_DRIVER_CRC               18      CRC Module
-    MODULE_DRIVER_PWM               19      PWM Driver
-    MODULE_DRIVER_QSPI              20      QSPI Driver
-    MODULE_DRIVER_USB               21      USB Driver
-    MODULE_TARGET_SDK               22      SDK
+    MBED_MODULE_APPLICATION                     0       Application
+    MBED_MODULE_PLATFORM                        1       Platform
+    MBED_MODULE_KERNEL                          2       RTX Kernel
+    MBED_MODULE_NETWORK_STACK                   3       Network stack
+    MBED_MODULE_HAL                             4       HAL - Hardware Abstraction Layer
+    MBED_MODULE_MEMORY_SUBSYSTEM                5       Memory Subsystem
+    MBED_MODULE_FILESYSTEM                      6       Filesystem
+    MBED_MODULE_BLOCK_DEVICE                    7       Block device
+    MBED_MODULE_DRIVER                          8       Driver
+    MBED_MODULE_DRIVER_SERIAL                   9       Serial Driver
+    MBED_MODULE_DRIVER_RTC                      10      RTC Driver
+    MBED_MODULE_DRIVER_I2C                      11      I2C Driver
+    MBED_MODULE_DRIVER_SPI                      12      SPI Driver
+    MBED_MODULE_DRIVER_GPIO                     13      GPIO Driver
+    MBED_MODULE_DRIVER_ANALOG                   14      Analog Driver
+    MBED_MODULE_DRIVER_DIGITAL                  15      DigitalIO Driver
+    MBED_MODULE_DRIVER_CAN                      16      CAN Driver
+    MBED_MODULE_DRIVER_ETHERNET                 17      Ethernet Driver
+    MBED_MODULE_DRIVER_CRC                      18      CRC Module
+    MBED_MODULE_DRIVER_PWM                      19      PWM Driver
+    MBED_MODULE_DRIVER_QSPI                     20      QSPI Driver
+    MBED_MODULE_DRIVER_USB                      21      USB Driver
+    MBED_MODULE_TARGET_SDK                      22      SDK
+    MBED_MODULE_BLE                             23      BLE
+    MBED_MODULE_NETWORK_STATS                   24      Network Statistics
 
-    MBED_MODULE_UNKNOWN                  255     Unknown module
+    MBED_MODULE_UNKNOWN                         255     Unknown module
     \endverbatim
  *
  */
@@ -265,7 +266,7 @@ typedef enum _mbed_module_type {
     MBED_MODULE_KERNEL,
     MBED_MODULE_NETWORK_STACK,
     MBED_MODULE_HAL,
-    MBED_MODULE_NETWORK_STACKMODULE_MEMORY_SUBSYSTEM,
+    MBED_MODULE_MEMORY_SUBSYSTEM,
     MBED_MODULE_FILESYSTEM,
     MBED_MODULE_BLOCK_DEVICE,
     MBED_MODULE_DRIVER,
@@ -283,13 +284,15 @@ typedef enum _mbed_module_type {
     MBED_MODULE_DRIVER_QSPI,
     MBED_MODULE_DRIVER_USB,
     MBED_MODULE_TARGET_SDK,
+    MBED_MODULE_BLE,
+    MBED_MODULE_NETWORK_STATS,
     /* Add More entities here as required */
 
     MBED_MODULE_UNKNOWN = 255,
     MBED_MODULE_MAX = MBED_MODULE_UNKNOWN
 } mbed_module_type_t;
 
-//Use MBED_SUCCESS(=0) or any postive number for successful returns
+//Use MBED_SUCCESS(=0) or any positive number for successful returns
 #define MBED_SUCCESS           0
 
 #define MBED_POSIX_ERROR_BASE   0
@@ -300,23 +303,23 @@ typedef enum _mbed_module_type {
 /** mbed_error_code_t definition
  *
  *  mbed_error_code_t enumeration defines the Error codes and Error status values for MBED_MODULE_UNKNOWN.\n
- *  It defines all of Posix Error Codes/Statuses and Mbed System Error Codes/Statuses.\n\n
+ *  It defines all of POSIX Error Codes/Statuses and Mbed System Error Codes/Statuses.\n\n
  *
  *  @note
- *  Posix Error codes are defined using the macro MBED_DEFINE_POSIX_ERROR\n
+ *  POSIX Error codes are defined using the macro MBED_DEFINE_POSIX_ERROR\n
  *  For example MBED_DEFINE_POSIX_ERROR( EPERM, EPERM ). This effectively defines the following values:\n
  *      ERROR_CODE_EPERM = EPERM\n
  *      ERROR_EPERM = -EPERM\n
  *
- *  Posix Error codes are defined using the macro MBED_DEFINE_POSIX_ERROR\n
+ *  POSIX Error codes are defined using the macro MBED_DEFINE_POSIX_ERROR\n
  *  For example MBED_DEFINE_POSIX_ERROR( EPERM, EPERM ). This macro defines the following values:\n
  *      ERROR_CODE_EPERM = MBED_POSIX_ERROR_BASE+EPERM\n
  *      ERROR_EPERM = -(MBED_POSIX_ERROR_BASE+EPERM)\n
  *  Its effectively equivalent to:\n
  *      ERROR_CODE_EPERM = 1\n
  *      ERROR_EPERM = -1\n
- *  All Posix error codes currently supported by MbedOS(defined in mbed_retarget.h) are defined using the MBED_DEFINE_POSIX_ERROR macro.\n\n
- *  Below are the Posic error codes and the description:\n
+ *  All POSIX error codes currently supported by MbedOS(defined in mbed_retarget.h) are defined using the MBED_DEFINE_POSIX_ERROR macro.\n\n
+ *  Below are the POSIX error codes and the description:\n
  *  \verbatim
     EPERM                      1        Operation not permitted
     ENOENT                     2        No such file or directory
@@ -468,7 +471,7 @@ typedef enum _mbed_module_type {
     INVALID_DATA               258      Invalid data
     INVALID_FORMAT             259      Invalid format
     INVALID_INDEX              260      Invalid Index
-    INVALID_SIZE               261      Inavlid Size
+    INVALID_SIZE               261      Invalid Size
     INVALID_OPERATION          262      Invalid Operation
     NOT_FOUND                  263      Not Found
     ACCESS_DENIED              264      Access Denied
@@ -483,9 +486,9 @@ typedef enum _mbed_module_type {
     OPERATION_ABORTED          273      Operation failed
     WRITE_PROTECTED            274      Attempt to write to write-protected resource
     NO_RESPONSE                275      No response
-    SEMAPHORE_LOCK_FAILED      276      Sempahore lock failed
+    SEMAPHORE_LOCK_FAILED      276      Semaphore lock failed
     MUTEX_LOCK_FAILED          277      Mutex lock failed
-    SEMAPHORE_UNLOCK_FAILED    278      Sempahore unlock failed
+    SEMAPHORE_UNLOCK_FAILED    278      Semaphore unlock failed
     MUTEX_UNLOCK_FAILED        279      Mutex unlock failed
     CRC_ERROR                  280      CRC error or mismatch
     OPEN_FAILED                281      Open failed
@@ -523,11 +526,17 @@ typedef enum _mbed_module_type {
     DEVICE_BUSY                313      Device Busy
     CONFIG_UNSUPPORTED         314      Configuration not supported
     CONFIG_MISMATCH            315      Configuration mismatch
-    ALREADY_INITIALIZED        316      Already initialzied
+    ALREADY_INITIALIZED        316      Already initialized
     HARDFAULT_EXCEPTION        317      HardFault exception
     MEMMANAGE_EXCEPTION        318      MemManage exception
     BUSFAULT_EXCEPTION         319      BusFault exception
     USAGEFAULT_EXCEPTION       320      UsageFault exception
+    BLE_NO_FRAME_INITIALIZED,  321      BLE No frame initialized
+    BLE_BACKEND_CREATION_FAILED 322     BLE Backend creation failed
+    BLE_BACKEND_NOT_INITIALIZED 323     BLE Backend not initialized
+    ASSERTION_FAILED           324      Assertion Failed
+    AUTHENTICATION_FAILED      325      Authentication Failed
+    RBP_AUTHENTICATION_FAILED  326      Rollback Protect Authentication Failed
     \endverbatim
  *
  *  @note
@@ -542,9 +551,9 @@ typedef enum _mbed_module_type {
  *
  *  @note
  *  **Using error codes:** \n
- *  Posix error codes may be used in modules/functions currently using Posix error codes and switching them to Mbed-OS error codes
+ *  POSIX error codes may be used in modules/functions currently using POSIX error codes and switching them to Mbed-OS error codes
  *  may cause interoperability issues. For example, some of the filesystem, network stack implementations may need to use
- *  Posix error codes in order to keep them compatible with other modules interfacing with them, and may continue to use Posix error codes.
+ *  POSIX error codes in order to keep them compatible with other modules interfacing with them, and may continue to use POSIX error codes.
  *
  *  In all other cases, like for any native development of Mbed-OS modules Mbed-OS error codes should be used.
  *  This makes it easy to use Mbed-OS error reporting/logging infrastructure and makes debugging error scenarios
@@ -560,20 +569,19 @@ typedef enum _mbed_module_type {
  *
  *  \verbatim
     ++ MbedOS Error Info ++
-    Error Status: 0x80040103
-    Error Code: 259
-    Error Module: 04
-    Error Message: HAL Module error
-    Error Location: 0x000067C7
-    Error Value: 0x00005566
-    Current Thread: Id: 0x200024A8 EntryFn: 0x0000FB0D StackSize: 0x00001000 StackMem: 0x200014A8 SP: 0x2002FFD8
+    Error Status: 0x80FF013D Code: 317 Module: 255
+    Error Message: Fault exception
+    Location: 0x5CD1
+    Error Value: 0x4A2A
+    Current Thread: Id: 0x20001E80 Entry: 0x5EB1 StackSize: 0x1000 StackMem: 0x20000E80 SP: 0x2002FF90
+    For more info, visit: https://mbed.com/s/error?error=0x80FF013D&mbedos=999999&core=0x410FC241&compile=1&ver=5060528
     -- MbedOS Error Info --
     \endverbatim
  */
 
 typedef enum _mbed_error_code {
     //Below are POSIX ERROR CODE definitions, which starts at MBED_POSIX_ERROR_BASE(=0)
-    //POSIX ERROR CODE definitions starts at offset 0(MBED_POSIX_ERROR_BASE) to align them with actual Posix Error Code
+    //POSIX ERROR CODE definitions starts at offset 0(MBED_POSIX_ERROR_BASE) to align them with actual POSIX Error Code
     //defintions in mbed_retarget.h
     //                  Error Name                                    Error Code
     MBED_DEFINE_POSIX_ERROR(EPERM, EPERM),                              /* 1       Operation not permitted */
@@ -716,7 +724,7 @@ typedef enum _mbed_error_code {
     MBED_DEFINE_SYSTEM_ERROR(INVALID_DATA_DETECTED, 2),                 /* 258      Invalid data detected */
     MBED_DEFINE_SYSTEM_ERROR(INVALID_FORMAT, 3),                        /* 259      Invalid format */
     MBED_DEFINE_SYSTEM_ERROR(INVALID_INDEX, 4),                         /* 260      Invalid Index */
-    MBED_DEFINE_SYSTEM_ERROR(INVALID_SIZE, 5),                          /* 261      Inavlid Size */
+    MBED_DEFINE_SYSTEM_ERROR(INVALID_SIZE, 5),                          /* 261      Invalid Size */
     MBED_DEFINE_SYSTEM_ERROR(INVALID_OPERATION, 6),                     /* 262      Invalid Operation */
     MBED_DEFINE_SYSTEM_ERROR(ITEM_NOT_FOUND, 7),                        /* 263      Item Not Found */
     MBED_DEFINE_SYSTEM_ERROR(ACCESS_DENIED, 8),                         /* 264      Access Denied */
@@ -731,9 +739,9 @@ typedef enum _mbed_error_code {
     MBED_DEFINE_SYSTEM_ERROR(OPERATION_ABORTED, 17),                    /* 273      Operation failed */
     MBED_DEFINE_SYSTEM_ERROR(WRITE_PROTECTED, 18),                      /* 274      Attempt to write to write-protected resource */
     MBED_DEFINE_SYSTEM_ERROR(NO_RESPONSE, 19),                          /* 275      No response */
-    MBED_DEFINE_SYSTEM_ERROR(SEMAPHORE_LOCK_FAILED, 20),                /* 276      Sempahore lock failed */
+    MBED_DEFINE_SYSTEM_ERROR(SEMAPHORE_LOCK_FAILED, 20),                /* 276      Semaphore lock failed */
     MBED_DEFINE_SYSTEM_ERROR(MUTEX_LOCK_FAILED, 21),                    /* 277      Mutex lock failed */
-    MBED_DEFINE_SYSTEM_ERROR(SEMAPHORE_UNLOCK_FAILED, 22),              /* 278      Sempahore unlock failed */
+    MBED_DEFINE_SYSTEM_ERROR(SEMAPHORE_UNLOCK_FAILED, 22),              /* 278      Semaphore unlock failed */
     MBED_DEFINE_SYSTEM_ERROR(MUTEX_UNLOCK_FAILED, 23),                  /* 279      Mutex unlock failed */
     MBED_DEFINE_SYSTEM_ERROR(CRC_ERROR, 24),                            /* 280      CRC error or mismatch */
     MBED_DEFINE_SYSTEM_ERROR(OPEN_FAILED, 25),                          /* 281      Open failed */
@@ -771,11 +779,18 @@ typedef enum _mbed_error_code {
     MBED_DEFINE_SYSTEM_ERROR(DEVICE_BUSY, 57),                          /* 313      Device Busy */
     MBED_DEFINE_SYSTEM_ERROR(CONFIG_UNSUPPORTED, 58),                   /* 314      Configuration not supported */
     MBED_DEFINE_SYSTEM_ERROR(CONFIG_MISMATCH, 59),                      /* 315      Configuration mismatch */
-    MBED_DEFINE_SYSTEM_ERROR(ALREADY_INITIALIZED, 60),                  /* 316      Already initialzied */
+    MBED_DEFINE_SYSTEM_ERROR(ALREADY_INITIALIZED, 60),                  /* 316      Already initialized */
     MBED_DEFINE_SYSTEM_ERROR(HARDFAULT_EXCEPTION, 61),                  /* 317      HardFault exception */
     MBED_DEFINE_SYSTEM_ERROR(MEMMANAGE_EXCEPTION, 62),                  /* 318      MemManage exception */
     MBED_DEFINE_SYSTEM_ERROR(BUSFAULT_EXCEPTION, 63),                   /* 319      BusFault exception */
     MBED_DEFINE_SYSTEM_ERROR(USAGEFAULT_EXCEPTION, 64),                 /* 320      UsageFault exception*/
+    MBED_DEFINE_SYSTEM_ERROR(BLE_NO_FRAME_INITIALIZED, 65),             /* 321      BLE No frame initialized */
+    MBED_DEFINE_SYSTEM_ERROR(BLE_BACKEND_CREATION_FAILED, 66),          /* 322      BLE Backend creation failed */
+    MBED_DEFINE_SYSTEM_ERROR(BLE_BACKEND_NOT_INITIALIZED, 67),          /* 323      BLE Backend not initialized */
+    MBED_DEFINE_SYSTEM_ERROR(ASSERTION_FAILED, 68),                     /* 324      Assertion Failed */
+    MBED_DEFINE_SYSTEM_ERROR(AUTHENTICATION_FAILED, 69),                /* 325      Authentication Failed */
+    MBED_DEFINE_SYSTEM_ERROR(RBP_AUTHENTICATION_FAILED, 70),            /* 326      Rollback Protection Authentication Failed */
+    MBED_DEFINE_SYSTEM_ERROR(BLE_USE_INCOMPATIBLE_API, 71),             /* 327      Concurrent use of incompatible versions of a BLE API */
 
     //Everytime you add a new system error code, you must update
     //Error documentation under Handbook to capture the info on
@@ -819,6 +834,11 @@ typedef struct _mbed_error_ctx {
 #ifdef MBED_CONF_PLATFORM_MAX_ERROR_FILENAME_LEN
     char error_filename[MBED_CONF_PLATFORM_MAX_ERROR_FILENAME_LEN];
     uint32_t error_line_number;
+#endif
+#if MBED_CONF_PLATFORM_CRASH_CAPTURE_ENABLED
+    int32_t error_reboot_count;//everytime we write this struct we increment this value by 1, irrespective of time between reboots. Note that the data itself might change, but everytime we reboot due to error we update this count by 1
+    int32_t is_error_processed;//once this error is processed set this value to 1
+    uint32_t crc_error_ctx;//crc_error_ctx should always be the last member in this struct
 #endif
 } mbed_error_ctx;
 
@@ -864,7 +884,7 @@ typedef struct _mbed_error_ctx {
  *
  */
 
-void error(const char *format, ...);
+MBED_NORETURN void error(const char *format, ...) MBED_PRINTF(1, 2);
 
 /**
  * Call this Macro to generate a mbed_error_status_t value for a System error
@@ -915,12 +935,62 @@ void error(const char *format, ...);
  * Callback/Error hook function prototype. Applications needing a callback when an error is reported can use mbed_set_error_hook function
  * to register a callback/error hook function using the following prototype. When an error happens in the system error handling
  * implementation will invoke this callback with the mbed_error_status_t reported and the error context at the time of error.
- * @param  error_status     mbed_error_status_t status being reported.
  * @param  error_ctx        Error context structure associated with this error.
  * @return                  void
  *
  */
 typedef void (*mbed_error_hook_t)(const mbed_error_ctx *error_ctx);
+
+
+/**
+ * Callback function for reporting error context during boot up. When MbedOS error handling system detects a fatal error
+ * it will auto-reboot the system(if MBED_CONF_PLATFORM_FATAL_ERROR_AUTO_REBOOT_ENABLED is enabled) after capturing the
+ * error info in special crash data RAM region. Once rebooted, MbedOS initialization routines will call this function with a pointer to
+ * the captured mbed_error_ctx structure. If application implementation needs to receive this callback, mbed_error_reboot_callback
+ * function should be overriden with custom implementation. By default it's defined as a WEAK function in mbed_error.c.
+ * Note that this callback will be invoked before the system starts executing main() function. So the implementation of
+ * the callback should be aware any resource limitations/availability of resources which are yet to be initialized by application main().
+ *
+ * @param  error_ctx        Error context structure associated with this error.
+ * @return                  void
+ *
+ */
+void mbed_error_reboot_callback(mbed_error_ctx *error_context);
+
+/**
+ * Initialize error handling system, this is called by the mbed-os boot sequence. This is not required to be called by Application unless the boot sequence is overridden by the system implementation.
+ * NOTE: If MBED_CONF_PLATFORM_FATAL_ERROR_AUTO_REBOOT_ENABLED is enabled and if the current reboot count exceeds MBED_CONF_PLATFORM_ERROR_REBOOT_MAX the system will halt when this function is called,
+ *       and in such cases the caller will not get the control back. Also note that calling this function may trigger mbed_error_reboot_callback() if application side overides mbed_error_reboot_callback().
+ * @return                  MBED_SUCCESS on success.
+ *
+ */
+
+mbed_error_status_t mbed_error_initialize(void);
+
+/**
+ * Call this function to retrieve the error context after a fatal error which triggered a system reboot. The function retrieves the error context stored in crash-report ram area which is preserved over reboot.
+ * @param  error_info           Pointer to mbed_error_ctx struct allocated by the caller. This is the mbed_error_ctx info captured as part of the fatal error which triggered the reboot.
+ * @return                      0 or MBED_SUCCESS on success.
+ *                              MBED_ERROR_INVALID_ARGUMENT in case of invalid error_info pointer
+ *                              MBED_ERROR_ITEM_NOT_FOUND if no reboot context is currently captured by the system
+ *
+ */
+mbed_error_status_t mbed_get_reboot_error_info(mbed_error_ctx *error_info);
+
+/**
+ * Calling this function resets the current reboot context captured by the system(stored in special crash data RAM region).
+ * @return                  MBED_SUCCESS on success.
+ *                          MBED_ERROR_ITEM_NOT_FOUND if no reboot context is currently captured by the system
+ */
+mbed_error_status_t mbed_reset_reboot_error_info(void);
+
+/**
+ * Calling this function resets the current reboot count stored as part of error context captured in special crash data RAM region.
+ *                          The function will also update the CRC value stored as part of error context accordingly.
+ * @return                  MBED_SUCCESS on success.
+ *                          MBED_ERROR_ITEM_NOT_FOUND if no reboot context is currently captured by the system
+ */
+mbed_error_status_t mbed_reset_reboot_count(void);
 
 /**
  * Call this function to set a system error/warning. This function will log the error status with the context info and return to caller.
@@ -972,8 +1042,7 @@ int mbed_get_error_count(void);
  * @param  error_value      Value associated with the error status. This would depend on error code/error scenario.
  * @param  filename         Name of the source file originating the error( Most callers can pass __FILE__ here ).
  * @param  line_number      The line number of the source file originating the error( Most callers can pass __LINE__ here ) .
- * @return                  0 or MBED_SUCCESS.
- *                          MBED_ERROR_INVALID_ARGUMENT if called with invalid error status/codes
+ * @return                  Does not return.
  *
  * @code
  *
@@ -983,7 +1052,7 @@ int mbed_get_error_count(void);
  *
  * @note See MBED_WARNING/MBED_ERROR macros which provides a wrapper on this API
  */
-mbed_error_status_t mbed_error(mbed_error_status_t error_status, const char *error_msg, unsigned int error_value, const char *filename, int line_number);
+MBED_NORETURN mbed_error_status_t mbed_error(mbed_error_status_t error_status, const char *error_msg, unsigned int error_value, const char *filename, int line_number);
 
 /**
  * Registers an application defined error callback with the error handling system.

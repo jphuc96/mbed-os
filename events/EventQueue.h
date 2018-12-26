@@ -74,7 +74,7 @@ public:
      *
      *  When called with a finite timeout, the dispatch function is guaranteed
      *  to terminate. When called with a timeout of 0, the dispatch function
-     *  does not wait and is irq safe.
+     *  does not wait and is IRQ safe.
      *
      *  @param ms       Time to wait for events in milliseconds, a negative
      *                  value will dispatch events indefinitely
@@ -119,7 +119,7 @@ public:
      *
      *  id must be valid i.e. event must have not finished executing.
      *
-     *  The cancel function is irq safe.
+     *  The cancel function is IRQ safe.
      *
      *  If called while the event queue's dispatch loop is active, the cancel
      *  function does not guarantee that the event will not execute after it
@@ -136,7 +136,7 @@ public:
      *
      *  id must be valid i.e. event must have not finished executing.
      *
-     *  This function is irq safe.
+     *  This function is IRQ safe.
      *
      *  @param id       Unique id of the event
      *
@@ -183,20 +183,439 @@ public:
      */
     void chain(EventQueue *target);
 
+
+
+#if defined(DOXYGEN_ONLY)
     /** Calls an event on the queue
      *
      *  The specified callback will be executed in the context of the event
      *  queue's dispatch loop.
      *
-     *  The call function is irq safe and can act as a mechanism for moving
-     *  events out of irq contexts.
+     *  The call function is IRQ safe and can act as a mechanism for moving
+     *  events out of IRQ contexts.
      *
      *  @param f        Function to execute in the context of the dispatch loop
+     *  @param args     Arguments to pass to the callback
      *  @return         A unique id that represents the posted event and can
      *                  be passed to cancel, or an id of 0 if there is not
      *                  enough memory to allocate the event.
      *                  Returned id will remain valid until event has finished
      *                  executing.
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     int main() {
+     *         // creates a queue with the default size
+     *         EventQueue queue;
+     *
+     *         // events are simple callbacks
+     *         queue.call(printf, "called immediately\n");
+     *
+     *         // the dispatch method executes events
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    template <typename F, typename ...Args>
+    int call(F f, Args ...args);
+
+    /** Calls an event on the queue
+     *
+     *  The specified callback is executed in the context of the event
+     *  queue's dispatch loop.
+     *
+     *  The call function is IRQ safe and can act as a mechanism for moving
+     *  events out of IRQ contexts.
+     *
+     *  @param obj        Object to call with the member function
+     *  @param method     Member function to execute in the context of the dispatch loop
+     *  @param args       Arguments to pass to the callback
+     *  @return           A unique ID that represents the posted event and can
+     *                    be passed to cancel, or an ID of 0 if there is not
+     *                    enough memory to allocate the event.
+     *                    Returned ID remains valid until event has finished
+     *                    executing.
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     class EventHandler {
+     *         int _id;
+     *     public:
+     *         EventHandler(int id) : _id(id) { }
+     *
+     *         void handler(int c) {
+     *             printf("ID: %d Param: %d\r\n", _id, c);
+     *         }
+     *     };
+     *
+     *     int main() {
+     *         // creates a queue with the default size
+     *         EventQueue queue;
+     *
+     *         // Create EventHandler object with state
+     *         EventHandler handler_cb(1);
+     *
+     *         // events are simple callbacks, call object method
+     *         // with provided parameter
+     *         queue.call(&handler_cb, &EventHandler::handler, 2);
+     *
+     *         // the dispath method executes events
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    // AStyle ignore, not handling correctly below
+    // *INDENT-OFF*
+    template <typename T, typename R, typename ...Args>
+    int call(T *obj, R (T::*method)(Args ...args), Args ...args);
+    // *INDENT-ON*
+
+    /** Calls an event on the queue after a specified delay
+     *
+     *  The specified callback is executed in the context of the event
+     *  queue's dispatch loop.
+     *
+     *  The call_in function is IRQ safe and can act as a mechanism for moving
+     *  events out of IRQ contexts.
+     *
+     *  @param ms       Time to delay in milliseconds
+     *  @param args     Arguments to pass to the callback
+     *  @return         A unique ID that represents the posted event and can
+     *                  be passed to cancel, or an ID of 0 if there is not
+     *                  enough memory to allocate the event.
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     int main() {
+     *         // creates a queue with the default size
+     *         EventQueue queue;
+     *
+     *         // events are simple callbacks
+     *         queue.call_in(2000, printf, "called in 2 seconds\n");
+     *
+     *         // the dispatch methods executes events
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    template <typename F, typename ...Args>
+    int call_in(int ms, Args ...args);
+
+    /** Calls an event on the queue after a specified delay
+     *
+     *  The specified callback is executed in the context of the event
+     *  queue's dispatch loop.
+     *
+     *  The call_in function is IRQ safe and can act as a mechanism for moving
+     *  events out of IRQ contexts.
+     *
+     *  @param ms       Time to delay in milliseconds
+     *  @param obj      Object to call with the member function
+     *  @param method   Member function to execute in the context of the dispatch loop
+     *  @param args     Arguments to pass to the callback
+     *  @return         A unique ID that represents the posted event and can
+     *                  be passed to cancel, or an ID of 0 if there is not
+     *                  enough memory to allocate the event.
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     class EventHandler {
+     *         int _id;
+     *     public:
+     *         EventHandler(int id) : _id(id) { }
+     *
+     *         void handler(int c) {
+     *             printf("ID: %d Param: %d\r\n", _id, c);
+     *         }
+     *     };
+     *
+     *     int main() {
+     *         // creates a queue with the default size
+     *         EventQueue queue;
+     *
+     *         // Create EventHandler object with state
+     *         EventHandler handler_cb(3);
+     *
+     *         // events are simple callbacks, call object method in 2 seconds
+     *         // with provided parameter
+     *         queue.call_in(2000, &handler_cb, &EventHandler::handler, 4);
+     *
+     *         // the dispatch method executes events
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    // AStyle ignore, not handling correctly below
+    // *INDENT-OFF*
+    template <typename T, typename R, typename ...Args>
+    int call_in(int ms, T *obj, R (T::*method)(Args ...args), Args ...args);
+    // *INDENT-ON*
+
+    /** Calls an event on the queue periodically
+     *
+     *  @note The first call_every event occurs after the specified delay.
+     *  To create a periodic event that fires immediately, @see Event.
+     *
+     *  The specified callback is executed in the context of the event
+     *  queue's dispatch loop.
+     *
+     *  The call_every function is IRQ safe and can act as a mechanism for
+     *  moving events out of IRQ contexts.
+     *
+     *  @param ms       Period of the event in milliseconds
+     *  @param f        Function to execute in the context of the dispatch loop
+     *  @param args     Arguments to pass to the callback
+     *  @return         A unique ID that represents the posted event and can
+     *                  be passed to cancel, or an ID of 0 if there is not
+     *                  enough memory to allocate the event.
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     class EventHandler {
+     *         int _id;
+     *     public:
+     *         EventHandler(int id) : _id(id) { }
+     *
+     *         void handler(int c) {
+     *             printf("ID: %d Param: %d\r\n", _id, c);
+     *         }
+     *     };
+     *
+     *     int main() {
+     *         // creates a queue with the default size
+     *         EventQueue queue;
+     *
+     *         // events are simple callbacks, call every 2 seconds
+     *         queue.call_every(2000, printf, "Calling every 2 seconds\n");
+     *
+     *         // the dispatch method executes events
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    template <typename F, typename ...Args>
+    int call_every(int ms, F f, Args ...args);
+
+    /** Calls an event on the queue periodically
+     *
+     *  @note The first call_every event occurs after the specified delay.
+     *  To create a periodic event that fires immediately, @see Event.
+     *
+     *  The specified callback is executed in the context of the event
+     *  queue's dispatch loop.
+     *
+     *  The call_every function is IRQ safe and can act as a mechanism for
+     *  moving events out of IRQ contexts.
+     *
+     *  @param ms       Period of the event in milliseconds
+     *  @param obj      Object to call with the member function
+     *  @param method   Member function to execute in the context of the dispatch loop
+     *  @param args     Arguments to pass to the callback
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     class EventHandler {
+     *         int _id;
+     *     public:
+     *         EventHandler(int id) : _id(id) { }
+     *
+     *         void handler(int c) {
+     *             printf("ID: %d Param: %d\r\n", _id, c);
+     *         }
+     *     };
+     *
+     *     int main() {
+     *         // creates a queue with the default size
+     *         EventQueue queue;
+     *
+     *         // Create EventHandler object with state
+     *         EventHandler handler_cb(5);
+     *
+     *         // events are simple callbacks, call object method every 2 seconds
+     *         // with provided parameter
+     *         queue.call_every(2000, &handler_cb, &EventHandler::handler, 6);
+     *
+     *         // the dispatch method executes events
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    // AStyle ignore, not handling correctly below
+    // *INDENT-OFF*
+    template <typename T, typename R, typename ...Args>
+    int call_every(int ms, T *obj, R (T::*method)(Args ...args), Args ...args);
+    // *INDENT-ON*
+
+    /** Creates an event bound to the event queue
+     *
+     *  Constructs an event bound to the specified event queue. The specified
+     *  callback acts as the target for the event and is executed in the
+     *  context of the event queue's dispatch loop once posted.
+     *
+     *  @param  func        Function to execute when the event is dispatched
+     *  @param  args        Arguments to pass to the callback
+     *  @return             Event that dispatches on the specific queue
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     void handler(int c) {
+     *         printf("Param: %d\r\n", c);
+     *     }
+     *
+     *     int main()
+     *     {
+     *         EventQueue queue;
+     *
+     *         // Create event with parameter
+     *         Event<void()>    e  = queue.event(handler, 1);
+     *         e();
+     *
+     *         // Create event and post parameter later
+     *         Event<void(int)> e2 = queue.event(handler);
+     *
+     *         // Post the event with paramter 8
+     *         e.post(8);
+     *
+     *         // The dispatch method executes events
+     *         queue.dispatch();
+     *
+     *         e2.post(2);
+     *
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    // AStyle ignore, not handling correctly below
+    // *INDENT-OFF*
+    template <typename R, typename ...BoundArgs, typename ...Args>
+    Event<void(Args...)> event(R (*func)(BoundArgs...), Args ...args);
+    // *INDENT-ON*
+
+    /** Creates an event bound to the event queue
+     *
+     *  Constructs an event bound to the specified event queue. The specified
+     *  callback acts as the target for the event and is executed in the
+     *  context of the event queue's dispatch loop once posted.
+     *
+     *  @param obj             Object to call with the member function
+     *  @param method          Member function to execute in the context of the dispatch loop
+     *  @param context_args    Arguments to pass to the callback
+     *  @return                Event that dispatches on the specific queue
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     class EventHandler {
+     *         int _id;
+     *
+     *     public:
+     *         EventHandler(int id) : _id(id) { }
+     *
+     *         void handler(int c) {
+     *             printf("ID: %d Param: %d\r\n", _id, c);
+     *         }
+     *     };
+     *
+     *     int main()
+     *     {
+     *         EventQueue queue;
+     *
+     *         EventHandler handler_cb(10);
+     *
+     *         // Create event on the eventqueue with a method callback
+     *         Event<void(int)> e = queue.event(&handler_cb, &EventHandler::handler);
+     *
+     *         // Post the event with paramter 8
+     *         e.post(11);
+     *
+     *         // The dispatch method executes events
+     *         queue.dispatch();
+     *     }
+     * @endcode
+     */
+    // AStyle ignore, not handling correctly below
+    // *INDENT-OFF*
+    template <typename T, typename R, typename ...BoundArgs, typename ...ContextArgs, typename ...Args>
+    Event<void(Args...)> event(T *obj, R (T::*method)(BoundArgs..., Args...), ContextArgs ...context_args);
+    // *INDENT-ON*
+
+    /** Creates an event bound to the event queue
+     *
+     *  Constructs an event bound to the specified event queue. The specified
+     *  callback acts as the target for the event and is executed in the
+     *  context of the event queue's dispatch loop once posted.
+     *
+     *  @param  cb             Callback object
+     *  @param  context_args   Arguments to pass to the callback
+     *  @return                Event that dispatches on the specific queue
+     *
+     *  @code
+     *     #include "mbed.h"
+     *
+     *     void handler(int c) {
+     *         printf("Param: %d\r\n", c);
+     *     }
+     *
+     *     int main()
+     *     {
+     *         EventQueue queue;
+     *         // Create callback object acting as a function
+     *         // pointer to handler
+     *         Callback<void(int)> cb(handler);
+     *
+     *         // Pass the callback object to the eventqueue
+     *         Event<void(int)> e = queue.event(cb);
+     *
+     *         // Post the event with parameter 8
+     *         e.post(9);
+     *
+     *         // The dispatch method executes events
+     *         q.dispatch();
+     *     }
+     *  @endcode
+     */
+    template <typename R, typename ...BoundArgs, typename ...ContextArgs, typename ...Args>
+    Event<void(Args...)> event(mbed::Callback<R(BoundArgs..., Args...)> cb, ContextArgs ...context_args);
+
+#else
+
+    /** Calls an event on the queue
+     *
+     *  The specified callback is executed in the context of the event
+     *  queue's dispatch loop.
+     *
+     *  The call function is IRQ safe and can act as a mechanism for moving
+     *  events out of IRQ contexts.
+     *
+     *  @param f        Function to execute in the context of the dispatch loop
+     *  @return         A unique ID that represents the posted event and can
+     *                  be passed to cancel, or an ID of 0 if there is not
+     *                  enough memory to allocate the event.
+     *                  Returned ID remains valid until event has finished
+     *                  executing.
+     *
+     * @code
+     *     #include "mbed.h"
+     *
+     *     int main()
+     *     {
+     *         EventQueue queue;
+     *
+     *         Callback<void(int)> cb(handler);
+     *
+     *         // Create event on the eventqueue with a separate callback object
+     *         Event<void(int)> e = queue.event(cb);
+     *         e.post(1);
+     *         queue.dispatch();
+     *     }
+     * @endcode
      */
     template <typename F>
     int call(F f)
@@ -210,6 +629,7 @@ public:
         equeue_event_dtor(e, &EventQueue::function_dtor<F>);
         return equeue_post(&_equeue, &EventQueue::function_call<F>, e);
     }
+
 
     /** Calls an event on the queue
      *  @see                    EventQueue::call
@@ -487,11 +907,11 @@ public:
      *  The specified callback will be executed in the context of the event
      *  queue's dispatch loop.
      *
-     *  The call_in function is irq safe and can act as a mechanism for moving
-     *  events out of irq contexts.
+     *  The call_in function is IRQ safe and can act as a mechanism for moving
+     *  events out of IRQ contexts.
      *
-     *  @param f        Function to execute in the context of the dispatch loop
      *  @param ms       Time to delay in milliseconds
+     *  @param f        Function to execute in the context of the dispatch loop
      *  @return         A unique id that represents the posted event and can
      *                  be passed to cancel, or an id of 0 if there is not
      *                  enough memory to allocate the event.
@@ -794,8 +1214,8 @@ public:
      *  The specified callback will be executed in the context of the event
      *  queue's dispatch loop.
      *
-     *  The call_every function is irq safe and can act as a mechanism for
-     *  moving events out of irq contexts.
+     *  The call_every function is IRQ safe and can act as a mechanism for
+     *  moving events out of IRQ contexts.
      *
      *  @param f        Function to execute in the context of the dispatch loop
      *  @param ms       Period of the event in milliseconds
@@ -2395,8 +2815,10 @@ public:
      */
     template <typename R, typename B0, typename B1, typename B2, typename B3, typename B4, typename C0, typename C1, typename C2, typename C3, typename C4, typename A0, typename A1, typename A2, typename A3, typename A4>
     Event<void(A0, A1, A2, A3, A4)> event(mbed::Callback<R(B0, B1, B2, B3, B4, A0, A1, A2, A3, A4)> cb, C0 c0, C1 c1, C2 c2, C3 c3, C4 c4);
+#endif
 
 protected:
+#if !defined(DOXYGEN_ONLY)
     template <typename F>
     friend class Event;
     struct equeue _equeue;
@@ -2973,6 +3395,7 @@ protected:
             f(c0, c1, c2, c3, c4, a0, a1, a2, a3, a4);
         }
     };
+#endif //!defined(DOXYGEN_ONLY)
 };
 
 }

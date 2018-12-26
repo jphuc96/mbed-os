@@ -46,7 +46,7 @@ void increment_with_delay()
 {
     while (1) {
         counter++;
-        Thread::wait(500);
+        ThisThread::sleep_for(500);
     }
 }
 
@@ -101,7 +101,7 @@ void test_case_multi_threads_blocked()
             TEST_ASSERT_EQUAL(TEST_STACK_SIZE, stats[i].stack_size);
             TEST_ASSERT_EQUAL(osPriorityNormal1, stats[i].priority);
             TEST_ASSERT_EQUAL(osThreadBlocked, stats[i].state);
-        } else if (0 == strcmp (stats[i].name, "Th1")) {
+        } else if (0 == strcmp(stats[i].name, "Th1")) {
             TEST_ASSERT_EQUAL(TEST_STACK_SIZE, stats[i].stack_size);
             TEST_ASSERT_EQUAL(osPriorityNormal, stats[i].priority);
         }
@@ -111,7 +111,7 @@ void test_case_multi_threads_blocked()
     uint32_t ret = ef.set(FLAG_SIGNAL_DEC);
     TEST_ASSERT_FALSE(ret & osFlagsError);
 
-    Thread::wait(100);
+    ThisThread::sleep_for(100);
 
     count = mbed_stats_thread_get_each(stats, MAX_THREAD_STATS);
     TEST_ASSERT_EQUAL(1, (count - old_count));

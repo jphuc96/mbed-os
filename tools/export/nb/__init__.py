@@ -36,31 +36,6 @@ class GNUARMNetbeans(Exporter):
     def prepare_sys_lib(libname):
         return "-l" + libname
 
-    def toolchain_flags(self, toolchain):
-        """Returns a dictionary of toolchain flags.
-        Keys of the dictionary are:
-        cxx_flags    - c++ flags
-        c_flags      - c flags
-        ld_flags     - linker flags
-        asm_flags    - assembler flags
-        common_flags - common options
-
-        The difference from the above is that it takes a parameter.
-        """
-
-        # Note: use the config options from the currently selected toolchain.
-        config_header = self.toolchain.get_config_header()
-
-        flags = {key + "_flags": copy.deepcopy(value) for key, value
-                 in toolchain.flags.items()}
-        if config_header:
-            config_header = relpath(config_header,
-                                    self.resources.file_basepath[config_header])
-            header_options = self.toolchain.get_config_option(config_header)
-            flags['c_flags'] += header_options
-            flags['cxx_flags'] += header_options
-        return flags
-
     @staticmethod
     def get_defines_and_remove_from_flags(flags_in, str_key):
         defines = []
@@ -202,9 +177,6 @@ class GNUARMNetbeans(Exporter):
 
         sys_libs = [self.prepare_sys_lib(lib) for lib
                     in self.toolchain.sys_libs]
-        preproc = " ".join([basename(self.toolchain.preproc[0])] +
-                           self.toolchain.preproc[1:] +
-                           self.toolchain.ld[1:])
 
         if 'nbproject' in include_paths:
             include_paths.remove('nbproject')
@@ -233,7 +205,7 @@ class GNUARMNetbeans(Exporter):
             'cpp_std': self.get_netbeans_cpp_std(cpp_std),
             'linker_script': self.ld_script,
             'linker_libs': sys_libs,
-            'pp_cmd': preproc,
+            'pp_cmd': " ".join(self.toolchain.preproc),
             'cc_cmd': self.toolchain.cc[0],
             'cppc_cmd': self.toolchain.cppc[0],
             'asm_cmd': self.toolchain.asm[0],

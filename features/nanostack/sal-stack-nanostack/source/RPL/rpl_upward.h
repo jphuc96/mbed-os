@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017, Arm Limited and affiliates.
+ * Copyright (c) 2015-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,6 +88,7 @@ void rpl_instance_slow_timer(rpl_instance_t *instance, uint16_t seconds);
 rpl_dodag_t *rpl_lookup_dodag(const rpl_instance_t *instance, const uint8_t *dodagid);
 rpl_dodag_t *rpl_create_dodag(rpl_instance_t *instance, const uint8_t *dodagid, uint8_t g_mop_prf);
 void rpl_delete_dodag(rpl_dodag_t *dodag);
+void rpl_delete_dodag_root(rpl_dodag_t *dodag);
 uint8_t rpl_dodag_mop(const rpl_dodag_t *dodag);
 void rpl_dodag_set_root(rpl_dodag_t *dodag, bool root);
 #ifdef HAVE_RPL_ROOT
@@ -134,7 +135,7 @@ void rpl_neighbour_update_dodag_version(rpl_neighbour_t *neighbour, rpl_dodag_ve
 bool rpl_neighbour_update_dtsn(rpl_neighbour_t *neighbour, uint8_t dtsn);
 rpl_instance_t *rpl_neighbour_instance(const rpl_neighbour_t *neighbour);
 
-void rpl_instance_neighbours_changed(rpl_instance_t *instance);
+void rpl_instance_neighbours_changed(rpl_instance_t *instance, const rpl_dodag_t *dodag);
 void rpl_instance_run_parent_selection(rpl_instance_t *instance);
 
 void rpl_upward_print_instance(rpl_instance_t *instance, route_print_fn_t *print_fn);

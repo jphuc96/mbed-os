@@ -2158,7 +2158,7 @@
 
 
 #ifndef PPI_ENABLED
-#define PPI_ENABLED 0
+#define PPI_ENABLED 1
 #endif
 
 // <e> PWM_ENABLED - nrf_drv_pwm - PWM peripheral driver
@@ -8557,9 +8557,7 @@
 // <1=> NRF_CLOCK_LF_SRC_XTAL
 // <2=> NRF_CLOCK_LF_SRC_SYNTH
 
-#ifndef NRF_SDH_CLOCK_LF_SRC
-#define NRF_SDH_CLOCK_LF_SRC 1
-#endif
+#include "nrf5x_lf_clk_helper.h"
 
 // <o> NRF_SDH_CLOCK_LF_RC_CTIV - SoftDevice calibration timer interval.
 #ifndef NRF_SDH_CLOCK_LF_RC_CTIV

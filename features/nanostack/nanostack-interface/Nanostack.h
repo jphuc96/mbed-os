@@ -18,7 +18,6 @@
 #ifndef NANOSTACK_H_
 #define NANOSTACK_H_
 
-#include "mbed.h"
 #include "OnboardNetworkStack.h"
 #include "NanostackMemoryManager.h"
 #include "MeshInterface.h"
@@ -37,6 +36,7 @@ public:
     class MeshInterface;
     class LoWPANNDInterface;
     class ThreadInterface;
+    class WisunInterface;
 
     /* Implement OnboardNetworkStack method */
     virtual nsapi_error_t add_ethernet_interface(EMAC &emac, bool default_if, OnboardNetworkStack::Interface **interface_out);

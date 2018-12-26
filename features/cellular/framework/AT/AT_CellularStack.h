@@ -83,6 +83,21 @@ protected:
 
     class CellularSocket {
     public:
+        CellularSocket() :
+            id(-1),
+            connected(false),
+            proto(NSAPI_UDP),
+            remoteAddress("", 0),
+            localAddress("", 0),
+            _cb(NULL),
+            _data(NULL),
+            created(false),
+            started(false),
+            tx_ready(false),
+            rx_avail(false),
+            pending_bytes(0)
+        {
+        }
         // Socket id from cellular device
         int id;
         // Being connected means remote ip address and port are set
@@ -96,6 +111,7 @@ protected:
         bool started; // socket has been opened on modem stack
         bool tx_ready; // socket is ready for sending on modem stack
         bool rx_avail; // socket has data for reading on modem stack
+        nsapi_size_t pending_bytes; // The number of received bytes pending
     };
 
     /**
@@ -164,6 +180,12 @@ protected:
 
     // stack type from PDP context
     nsapi_ip_stack_t _stack_type;
+
+private:
+    int find_socket_index(nsapi_socket_t handle);
+
+    // mutex for write/read to a _socket array, needed when multiple threads may open sockets simultaneously
+    PlatformMutex _socket_mutex;
 };
 
 } // namespace mbed

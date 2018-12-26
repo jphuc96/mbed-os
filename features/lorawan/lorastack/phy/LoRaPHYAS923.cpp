@@ -67,7 +67,7 @@
  */
 #define AS923_DEFAULT_DATARATE                      DR_2
 
-#define AS923_DEFAULT_MAX_DATARATE                  DR_7
+#define AS923_DEFAULT_MAX_DATARATE                  DR_5
 
 /*!
  * The minimum datarate which is used when the
@@ -194,13 +194,13 @@ static const band_t AS923_BAND0 = {100, AS923_MAX_TX_POWER, 0, 0, 0, 923000000, 
  * LoRaMac default channel 1
  * Channel = { Frequency [Hz], RX1 Frequency [Hz], { ( ( DrMax << 4 ) | DrMin ) }, Band }
  */
-static const channel_params_t AS923_LC1 = { 923200000, 0, { ( ( DR_5 << 4 ) | DR_0 ) }, 0 };
+static const channel_params_t AS923_LC1 = { 923200000, 0, { ((DR_5 << 4) | DR_0) }, 0 };
 
 /*!
  * LoRaMac default channel 2
  * Channel = { Frequency [Hz], RX1 Frequency [Hz], { ( ( DrMax << 4 ) | DrMin ) }, Band }
  */
-static const channel_params_t AS923_LC2 = { 923400000, 0, { ( ( DR_5 << 4 ) | DR_0 ) }, 0 };
+static const channel_params_t AS923_LC2 = { 923400000, 0, { ((DR_5 << 4) | DR_0) }, 0 };
 
 /*!
  * LoRaMac channels which are allowed for the join procedure
@@ -228,12 +228,12 @@ static const uint8_t datarates_AS923[]  = {12, 11, 10,  9,  8,  7, 7, 50};
 static const uint32_t bandwidths_AS923[] = {125000, 125000, 125000, 125000, 125000, 125000, 250000, 0};
 
 #if (MBED_CONF_LORA_DWELL_TIME == 0)
-    static  const uint8_t max_payload_table[] = {51, 51, 51, 115, 242, 242, 242, 242};
-    static const uint8_t max_payload_table_with_repeater[] = {51, 51, 51, 115, 222, 222, 222, 222};
+static  const uint8_t max_payload_table[] = {51, 51, 51, 115, 242, 242, 242, 242};
+static const uint8_t max_payload_table_with_repeater[] = {51, 51, 51, 115, 222, 222, 222, 222};
 #else
-    // this is the default, i.e.,
-    static const uint8_t max_payload_table[] = {0, 0, 11, 53, 125, 242, 242, 242};
-    static const uint8_t max_payload_table_with_repeater[] =  {0, 0, 11, 53, 125, 242, 242, 242};
+// this is the default, i.e.,
+static const uint8_t max_payload_table[] = {0, 0, 11, 53, 125, 242, 242, 242};
+static const uint8_t max_payload_table_with_repeater[] =  {0, 0, 11, 53, 125, 242, 242, 242};
 #endif
 
 /*!
@@ -241,8 +241,7 @@ static const uint32_t bandwidths_AS923[] = {125000, 125000, 125000, 125000, 1250
  */
 static const int8_t rx1_dr_offset_AS923[] = {0, 1, 2, 3, 4, 5, -1, -2};
 
-LoRaPHYAS923::LoRaPHYAS923(LoRaWANTimeHandler &lora_time)
-    : LoRaPHY(lora_time)
+LoRaPHYAS923::LoRaPHYAS923()
 {
     bands[0] = AS923_BAND0;
 
@@ -337,9 +336,9 @@ int8_t LoRaPHYAS923::get_alternate_DR(uint8_t nb_trials)
     return AS923_DWELL_LIMIT_DATARATE;
 }
 
-lorawan_status_t LoRaPHYAS923::set_next_channel(channel_selection_params_t* next_channel_prams,
-                                                uint8_t* channel, lorawan_time_t* time,
-                                                lorawan_time_t* aggregate_timeoff)
+lorawan_status_t LoRaPHYAS923::set_next_channel(channel_selection_params_t *next_channel_prams,
+                                                uint8_t *channel, lorawan_time_t *time,
+                                                lorawan_time_t *aggregate_timeoff)
 {
     uint8_t next_channel_idx = 0;
     uint8_t nb_enabled_channels = 0;
@@ -352,7 +351,7 @@ lorawan_status_t LoRaPHYAS923::set_next_channel(channel_selection_params_t* next
         channel_mask[0] |= LC(1) + LC(2);
     }
 
-    if (next_channel_prams->aggregate_timeoff <= _lora_time.get_elapsed_time(next_channel_prams->last_aggregate_tx_time)) {
+    if (next_channel_prams->aggregate_timeoff <= _lora_time->get_elapsed_time(next_channel_prams->last_aggregate_tx_time)) {
         // Reset Aggregated time off
         *aggregate_timeoff = 0;
 
@@ -362,13 +361,12 @@ lorawan_status_t LoRaPHYAS923::set_next_channel(channel_selection_params_t* next
                                             bands, AS923_MAX_NB_BANDS);
 
         // Search how many channels are enabled
-        nb_enabled_channels = enabled_channel_count(next_channel_prams->joined,
-                                                    next_channel_prams->current_datarate,
+        nb_enabled_channels = enabled_channel_count(next_channel_prams->current_datarate,
                                                     channel_mask,
                                                     enabled_channels, &delay_tx);
     }  else {
         delay_tx++;
-        next_tx_delay = next_channel_prams->aggregate_timeoff - _lora_time.get_elapsed_time(next_channel_prams->last_aggregate_tx_time);
+        next_tx_delay = next_channel_prams->aggregate_timeoff - _lora_time->get_elapsed_time(next_channel_prams->last_aggregate_tx_time);
     }
 
     if (nb_enabled_channels > 0) {
@@ -377,7 +375,7 @@ lorawan_status_t LoRaPHYAS923::set_next_channel(channel_selection_params_t* next
 
         for (uint8_t  i = 0, j = get_random(0, nb_enabled_channels - 1); i < AS923_MAX_NB_CHANNELS; i++) {
             next_channel_idx = enabled_channels[j];
-            j = ( j + 1 ) % nb_enabled_channels;
+            j = (j + 1) % nb_enabled_channels;
 
             // Perform carrier sense for AS923_CARRIER_SENSE_TIME
             // If the channel is free, we can stop the LBT mechanism
@@ -404,7 +402,7 @@ lorawan_status_t LoRaPHYAS923::set_next_channel(channel_selection_params_t* next
         }
 
         // Datarate not supported by any channel, restore defaults
-        channel_mask[0] |= LC( 1 ) + LC( 2 );
+        channel_mask[0] |= LC(1) + LC(2);
         *time = 0;
         return LORAWAN_STATUS_NO_CHANNEL_FOUND;
     }

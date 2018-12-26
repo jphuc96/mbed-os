@@ -23,7 +23,7 @@
 #include "hal/us_ticker_api.h"
 
 #if !DEVICE_USTICKER
-  #error [NOT_SUPPORTED] test not supported
+#error [NOT_SUPPORTED] test not supported
 #endif
 
 using namespace utest::v1;
@@ -34,17 +34,17 @@ extern uint32_t SystemCoreClock;
 #define US_PER_MSEC      1000
 #define MSEC_PER_SEC     1000
 
- /*
- * Define tolerance as follows:
- * tolerance = 500 us + 2% of measured time
- *
- * e.g.
- * 1 ms delay: tolerance = 520 us
- * 10 ms delay: tolerance = 700 us
- * 100 ms delay: tolerance = 2500 us
- * 1000 ms delay: tolerance = 20500 us
- *
- *  */
+/*
+* Define tolerance as follows:
+* tolerance = 500 us + 2% of measured time
+*
+* e.g.
+* 1 ms delay: tolerance = 520 us
+* 10 ms delay: tolerance = 700 us
+* 100 ms delay: tolerance = 2500 us
+* 1000 ms delay: tolerance = 20500 us
+*
+*  */
 #ifdef NO_SYSTICK
 #define TOLERANCE 5
 #else
@@ -64,6 +64,20 @@ static Timer *p_timer = NULL;
  * in case when timer which uses user ticker is tested.
  */
 static uint32_t curr_ticker_ticks_val;
+
+
+/* Replacement for generic wait functions to avoid invoking OS scheduling stuff. */
+void busy_wait_us(int us)
+{
+    const ticker_data_t *const ticker = get_us_ticker_data();
+    uint32_t start = ticker_read(ticker);
+    while ((ticker_read(ticker) - start) < (uint32_t)us);
+}
+
+void busy_wait_ms(int ms)
+{
+    busy_wait_us(ms * US_PER_MSEC);
+}
 
 /* User ticker interface function. */
 static void stub_interface_init()
@@ -103,10 +117,16 @@ static void stub_fire_interrupt(void)
     /* do nothing. */
 }
 
+/* User ticker interface function. */
+static void stub_free(void)
+{
+    /* do nothing. */
+}
+
 ticker_info_t info =
 { TICKER_FREQ_1MHZ, TICKER_BITS };
 
-const ticker_info_t * stub_get_info(void)
+const ticker_info_t *stub_get_info(void)
 {
     return &info;
 }
@@ -122,6 +142,7 @@ static const ticker_interface_t us_interface = {
     .clear_interrupt = stub_clear_interrupt,
     .set_interrupt = stub_set_interrupt,
     .fire_interrupt = stub_fire_interrupt,
+    .free = stub_free,
     .get_info = stub_get_info,
 };
 
@@ -132,7 +153,7 @@ static const ticker_data_t us_data = {
 };
 
 /* Function which returns user ticker data. */
-const ticker_data_t* get_user_ticker_data(void)
+const ticker_data_t *get_user_ticker_data(void)
 {
     return &us_data;
 }
@@ -196,7 +217,7 @@ void test_timer_creation_os_ticker()
 
     /* Wait 10 ms.
      * After that operation timer read routines should still return 0. */
-    wait_ms(10);
+    busy_wait_ms(10);
 
     /* Check results. */
     TEST_ASSERT_EQUAL_FLOAT(0, p_timer->read());
@@ -406,7 +427,7 @@ void test_timer_time_accumulation_os_ticker()
     p_timer->start();
 
     /* Wait 10 ms. */
-    wait_ms(10);
+    busy_wait_ms(10);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -420,7 +441,7 @@ void test_timer_time_accumulation_os_ticker()
     /* Wait 50 ms - this is done to show that time elapsed when
      * the timer is stopped does not have influence on the
      * timer counted time. */
-    wait_ms(50);
+    busy_wait_ms(50);
 
     /* ------ */
 
@@ -428,7 +449,7 @@ void test_timer_time_accumulation_os_ticker()
     p_timer->start();
 
     /* Wait 20 ms. */
-    wait_ms(20);
+    busy_wait_ms(20);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -449,7 +470,7 @@ void test_timer_time_accumulation_os_ticker()
     p_timer->start();
 
     /* Wait 30 ms. */
-    wait_ms(30);
+    busy_wait_ms(30);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -463,7 +484,7 @@ void test_timer_time_accumulation_os_ticker()
     /* Wait 50 ms - this is done to show that time elapsed when
      * the timer is stopped does not have influence on the
      * timer time. */
-    wait_ms(50);
+    busy_wait_ms(50);
 
     /* ------ */
 
@@ -471,7 +492,7 @@ void test_timer_time_accumulation_os_ticker()
     p_timer->start();
 
     /* Wait 1 sec. */
-    wait_ms(1000);
+    busy_wait_ms(1000);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -500,7 +521,7 @@ void test_timer_reset_os_ticker()
     p_timer->start();
 
     /* Wait 10 ms. */
-    wait_ms(10);
+    busy_wait_ms(10);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -518,7 +539,7 @@ void test_timer_reset_os_ticker()
     p_timer->start();
 
     /* Wait 20 ms. */
-    wait_ms(20);
+    busy_wait_ms(20);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -596,13 +617,13 @@ void test_timer_start_started_timer_os_ticker()
     p_timer->start();
 
     /* Wait 10 ms. */
-    wait_ms(10);
+    busy_wait_ms(10);
 
     /* Now start timer again. */
     p_timer->start();
 
     /* Wait 20 ms. */
-    wait_ms(20);
+    busy_wait_ms(20);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -666,7 +687,7 @@ void test_timer_float_operator_os_ticker()
     p_timer->start();
 
     /* Wait 10 ms. */
-    wait_ms(10);
+    busy_wait_ms(10);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -721,7 +742,7 @@ void test_timer_time_measurement()
     p_timer->start();
 
     /* Wait <wait_val_us> us. */
-    wait_us(wait_val_us);
+    busy_wait_us(wait_val_us);
 
     /* Stop the timer. */
     p_timer->stop();
@@ -733,7 +754,8 @@ void test_timer_time_measurement()
     TEST_ASSERT_UINT64_WITHIN(DELTA_US(wait_val_us / US_PER_MSEC), wait_val_us, p_timer->read_high_resolution_us());
 }
 
-utest::v1::status_t test_setup(const size_t number_of_cases) {
+utest::v1::status_t test_setup(const size_t number_of_cases)
+{
     GREENTEA_SETUP(15, "default_auto");
     return verbose_test_setup_handler(number_of_cases);
 }
@@ -762,7 +784,8 @@ Case cases[] = {
 
 Specification specification(test_setup, cases);
 
-int main() {
+int main()
+{
     return !Harness::run(specification);
 }
 

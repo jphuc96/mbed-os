@@ -38,17 +38,17 @@ nsapi_error_t NanostackEthernetInterface::initialize(NanostackEthernetPhy *phy)
         return NSAPI_ERROR_PARAMETER;
     }
 
-    _interface = new (nothrow) Nanostack::EthernetInterface(*phy);
+    _interface = new (std::nothrow) Nanostack::EthernetInterface(*phy);
     if (!_interface) {
         return NSAPI_ERROR_NO_MEMORY;
     }
 
     return get_interface()->initialize();
- }
+}
 
 nsapi_error_t Nanostack::EthernetInterface::bringup(bool dhcp, const char *ip,
-                      const char *netmask, const char *gw,
-                      nsapi_ip_stack_t stack, bool blocking)
+                                                    const char *netmask, const char *gw,
+                                                    nsapi_ip_stack_t stack, bool blocking)
 {
     if (stack == IPV4_STACK) {
         return NSAPI_ERROR_UNSUPPORTED;
@@ -87,25 +87,16 @@ nsapi_error_t Nanostack::EthernetInterface::bringup(bool dhcp, const char *ip,
     return 0;
 }
 
-int NanostackEthernetInterface::connect()
+nsapi_error_t NanostackEthernetInterface::do_initialize()
 {
     if (!_interface) {
         return NSAPI_ERROR_PARAMETER;
     }
-    return _interface->bringup(false, NULL, NULL, NULL, IPV6_STACK, _blocking);
+    return NSAPI_ERROR_OK;
 }
 
 nsapi_error_t Nanostack::EthernetInterface::bringdown()
 {
     enet_tasklet_disconnect();
     return 0;
-}
-
-
-int NanostackEthernetInterface::disconnect()
-{
-    if (!_interface) {
-        return NSAPI_ERROR_NO_CONNECTION;
-    }
-    return _interface->bringdown();
 }

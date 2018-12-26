@@ -24,6 +24,7 @@
 #include "ns_hal_init.h"
 #include "include/mesh_system.h"
 #include "mbed_assert.h"
+#include "mbed_error.h"
 // For tracing we need to define flag, have include and define group
 #define HAVE_DEBUG 1
 #include "ns_trace.h"
@@ -36,6 +37,9 @@ static uint8_t app_stack_heap[MBED_CONF_MBED_MESH_API_HEAP_SIZE + 1];
 static uint8_t *app_stack_heap;
 #endif
 static bool mesh_initialized = false;
+#ifdef MBED_CONF_MBED_MESH_API_HEAP_STAT_INFO_DEFINITION
+MBED_CONF_MBED_MESH_API_HEAP_STAT_INFO_DEFINITION;
+#endif
 
 /*
  * Heap error handler, called when heap problem is detected.
@@ -43,30 +47,18 @@ static bool mesh_initialized = false;
  */
 static void mesh_system_heap_error_handler(heap_fail_t event)
 {
-    tr_error("Heap error, mesh_system_heap_error_handler() %d", event);
-    switch (event) {
-        case NS_DYN_MEM_NULL_FREE:
-        case NS_DYN_MEM_DOUBLE_FREE:
-        case NS_DYN_MEM_ALLOCATE_SIZE_NOT_VALID:
-        case NS_DYN_MEM_POINTER_NOT_VALID:
-        case NS_DYN_MEM_HEAP_SECTOR_CORRUPTED:
-        case NS_DYN_MEM_HEAP_SECTOR_UNITIALIZED:
-            break;
-        default:
-            break;
-    }
-    while (1);
+    MBED_ERROR1(MBED_MAKE_ERROR(MBED_MODULE_NETWORK_STACK, MBED_ERROR_CODE_OUT_OF_MEMORY), "Heap error, mesh_system_heap_error_handler()", event);
 }
 
 void mesh_system_init(void)
 {
     if (mesh_initialized == false) {
 #if MBED_CONF_MBED_MESH_API_USE_MALLOC_FOR_HEAP
-        app_stack_heap = malloc(MBED_CONF_MBED_MESH_API_HEAP_SIZE+1);
+        app_stack_heap = malloc(MBED_CONF_MBED_MESH_API_HEAP_SIZE + 1);
         MBED_ASSERT(app_stack_heap);
 #endif
         ns_hal_init(app_stack_heap, MBED_CONF_MBED_MESH_API_HEAP_SIZE,
-                    mesh_system_heap_error_handler, NULL);
+                    mesh_system_heap_error_handler, MBED_CONF_MBED_MESH_API_HEAP_STAT_INFO);
         eventOS_scheduler_mutex_wait();
         net_init_core();
         eventOS_scheduler_mutex_release();

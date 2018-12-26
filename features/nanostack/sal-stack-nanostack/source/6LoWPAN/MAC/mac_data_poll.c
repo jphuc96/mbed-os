@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, Arm Limited and affiliates.
+ * Copyright (c) 2014-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: Apache-2.0
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -45,6 +45,7 @@
 #endif
 #include "6LoWPAN/MAC/mac_helper.h"
 #include "6LoWPAN/MAC/mac_data_poll.h"
+#include "Service_Libs/mac_neighbor_table/mac_neighbor_table.h"
 
 #define TRACE_GROUP "mPol"
 
@@ -93,7 +94,7 @@ static int8_t host_link_configuration(bool rx_on_idle, protocol_interface_info_e
     mac_helper_pib_boolean_set(cur, macRxOnWhenIdle, rx_on_idle);
 
     if (thread_info(cur)) {
-        if(rx_on_idle != backUp_bool){
+        if (rx_on_idle != backUp_bool) {
             //If mode have been changed, send child update
             thread_bootstrap_child_update_trig(cur);
         }
@@ -228,7 +229,7 @@ void mac_data_poll_disable(struct protocol_interface_info_entry *cur)
 
 void mac_data_poll_enable_check(protocol_interface_info_entry_t *cur)
 {
-    if (!cur || !cur->rfd_poll_info ) {
+    if (!cur || !cur->rfd_poll_info) {
         return;
     }
 
@@ -251,7 +252,7 @@ int8_t mac_data_poll_host_mode_get(struct protocol_interface_info_entry *cur, ne
 
 void mac_poll_timer_trig(uint32_t poll_time, protocol_interface_info_entry_t *cur)
 {
-    if( !cur ){
+    if (!cur) {
         return;
     }
     eventOS_event_timer_cancel(cur->id, mac_data_poll_tasklet);
@@ -261,19 +262,19 @@ void mac_poll_timer_trig(uint32_t poll_time, protocol_interface_info_entry_t *cu
 
             if (poll_time < 20) {
                 arm_event_s event = {
-                        .receiver = mac_data_poll_tasklet,
-                        .sender = mac_data_poll_tasklet,
-                        .event_id = cur->id,
-                        .data_ptr = NULL,
-                        .event_type = MAC_DATA_POLL_REQUEST_EVENT,
-                        .priority = ARM_LIB_MED_PRIORITY_EVENT,
+                    .receiver = mac_data_poll_tasklet,
+                    .sender = mac_data_poll_tasklet,
+                    .event_id = cur->id,
+                    .data_ptr = NULL,
+                    .event_type = MAC_DATA_POLL_REQUEST_EVENT,
+                    .priority = ARM_LIB_MED_PRIORITY_EVENT,
                 };
 
                 if (eventOS_event_send(&event) != 0) {
                     tr_error("eventOS_event_send() failed");
                 }
             } else {
-                if (eventOS_event_timer_request(cur->id, MAC_DATA_POLL_REQUEST_EVENT, mac_data_poll_tasklet, poll_time)!= 0) {
+                if (eventOS_event_timer_request(cur->id, MAC_DATA_POLL_REQUEST_EVENT, mac_data_poll_tasklet, poll_time) != 0) {
                     tr_error("Poll Timer start Fail");
                 }
             }
@@ -281,34 +282,52 @@ void mac_poll_timer_trig(uint32_t poll_time, protocol_interface_info_entry_t *cu
         }
     }
 }
+static mac_neighbor_table_entry_t *neighbor_data_poll_referesh(protocol_interface_info_entry_t *cur, uint8_t *address, addrtype_t type)
+{
+    mac_neighbor_table_entry_t *entry = mac_neighbor_table_address_discover(mac_neighbor_info(cur), address, type);
+
+    if (!entry) {
+        return NULL;
+    }
+
+    if (!entry->connected_device) {
+        return NULL;
+    }
+
+    if (!entry->nud_active) {
+        entry->lifetime = entry->link_lifetime;
+    }
+    return entry;
+}
 
 void mac_mlme_poll_confirm(protocol_interface_info_entry_t *cur, const mlme_poll_conf_t *confirm)
 {
-    if( !cur || !confirm ){
+    if (!cur || !confirm) {
         return;
     }
 
     uint32_t poll_time = 1;
     nwk_rfd_poll_setups_s *rf_ptr = cur->rfd_poll_info;
-    if( !rf_ptr ){
+    if (!rf_ptr) {
         return;
     }
 
     rf_ptr->pollActive = false;
+    mac_neighbor_table_entry_t *entry = NULL;
 
     switch (confirm->status) {
         case MLME_SUCCESS:
             //tr_debug("Poll Confirm: Data with Data");
             rf_ptr->nwk_parent_poll_fail = 0;
             //Trig new Data Poll immediately
-            mle_refresh_entry_timeout(cur->id, rf_ptr->poll_req.CoordAddress, (addrtype_t)rf_ptr->poll_req.CoordAddrMode, true);
+            entry = neighbor_data_poll_referesh(cur, rf_ptr->poll_req.CoordAddress, (addrtype_t)rf_ptr->poll_req.CoordAddrMode);
             poll_time = 1;
             break;
 
         case MLME_NO_DATA:
             //Start next case timer
             rf_ptr->nwk_parent_poll_fail = 0;
-            mle_refresh_entry_timeout(cur->id, rf_ptr->poll_req.CoordAddress, (addrtype_t)rf_ptr->poll_req.CoordAddrMode, true);
+            entry = neighbor_data_poll_referesh(cur, rf_ptr->poll_req.CoordAddress, (addrtype_t)rf_ptr->poll_req.CoordAddrMode);
             //tr_debug("Poll Confirm: No Data");
 
             if (rf_ptr->protocol_poll == 0) {
@@ -325,13 +344,16 @@ void mac_mlme_poll_confirm(protocol_interface_info_entry_t *cur, const mlme_poll
                 //tr_debug("Parent Poll Fail");
                 poll_time = 0;
                 rf_ptr->nwk_parent_poll_fail = 0;
-                if( rf_ptr->pollFailCb ){
+                if (rf_ptr->pollFailCb) {
                     rf_ptr->pollFailCb(cur->id);
                 }
             } else {
                 poll_time = 2000;
             }
             break;
+    }
+    if (thread_info(cur) && entry) {
+        thread_neighbor_communication_update(cur, entry->index);
     }
 
     mac_poll_timer_trig(poll_time, cur);
@@ -370,7 +392,7 @@ static void mac_data_poll_cb_run(int8_t interface_id)
 
     if (cur->mac_api && cur->mac_api->mlme_req) {
         rf_ptr->pollActive = true;
-        cur->mac_api->mlme_req(cur->mac_api, MLME_POLL, (void*) &rf_ptr->poll_req);
+        cur->mac_api->mlme_req(cur->mac_api, MLME_POLL, (void *) &rf_ptr->poll_req);
     } else {
         tr_error("MAC not registered to interface");
     }
@@ -379,13 +401,13 @@ static void mac_data_poll_cb_run(int8_t interface_id)
 int8_t mac_data_poll_host_mode_set(struct protocol_interface_info_entry *cur, net_host_mode_t mode, uint32_t poll_time)
 {
 #ifndef NO_MLE
-    if( !cur){
+    if (!cur) {
         return -1;
     }
     int8_t ret_val = 0;
     nwk_rfd_poll_setups_s *rf_ptr = cur->rfd_poll_info;
     //Check IF Bootsrap Ready and type is Host
-    if (!rf_ptr ) {
+    if (!rf_ptr) {
         return -1;
     }
 
@@ -423,7 +445,6 @@ int8_t mac_data_poll_host_mode_set(struct protocol_interface_info_entry *cur, ne
                 new_poll_time = (poll_time * 1000);
                 if (rf_ptr->host_mode == NET_HOST_RX_ON_IDLE) {
                     tr_debug("Init Poll timer and period");
-                    mle_class_mode_set(cur->id, MLE_CLASS_SLEEPY_END_DEVICE);
                 }
 
                 rf_ptr->nwk_app_poll_time = new_poll_time;
@@ -449,7 +470,6 @@ int8_t mac_data_poll_host_mode_set(struct protocol_interface_info_entry *cur, ne
                     }
                 }
                 tr_debug("Enable Poll By APP");
-                mle_class_mode_set(cur->id, MLE_CLASS_SLEEPY_END_DEVICE);
                 mac_helper_pib_boolean_set(cur, macRxOnWhenIdle, false);
                 mac_poll_timer_trig(1, cur);
                 rf_ptr->nwk_app_poll_time = 300;
@@ -500,7 +520,7 @@ void mac_data_poll_init(struct protocol_interface_info_entry *cur)
     nwk_rfd_poll_setups_s *rfd_ptr = cur->rfd_poll_info;
 
     if (!rfd_ptr) {
-        if (mac_data_poll_tasklet_init() < 0 ) {
+        if (mac_data_poll_tasklet_init() < 0) {
             tr_error("Mac data poll tasklet init fail");
         } else {
             rfd_ptr = ns_dyn_mem_alloc(sizeof(nwk_rfd_poll_setups_s));
@@ -525,14 +545,12 @@ void mac_data_poll_init(struct protocol_interface_info_entry *cur)
     if (cur->mac_parameters->RxOnWhenIdle) {
         tr_debug("Set Non-Sleepy HOST");
         rfd_ptr->host_mode = NET_HOST_RX_ON_IDLE;
-        mle_class_mode_set(cur->id, MLE_CLASS_END_DEVICE);
     } else {
 
         rfd_ptr->protocol_poll = 1;
         mac_poll_timer_trig(200, cur);
         tr_debug("Set Sleepy HOST configure");
         rfd_ptr->host_mode = NET_HOST_FAST_POLL_MODE;
-        mle_class_mode_set(cur->id, MLE_CLASS_SLEEPY_END_DEVICE);
         rfd_ptr->slow_poll_rate_seconds = 3;
         rfd_ptr->timeOutInSeconds = 32;
         rfd_ptr->nwk_app_poll_time = 300;

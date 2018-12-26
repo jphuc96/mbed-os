@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, Arm Limited and affiliates.
+ * Copyright (c) 2014-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -438,7 +438,7 @@ typedef int (response_cb)(int8_t interface_id, uint8_t *response_ptr, uint16_t r
  * \return 0,               Command send OK
  * \return <0               Command send Fail
  */
-int thread_test_diagnostic_command_send(int8_t interface_id, uint8_t *address_ptr,const char *uri_ptr, uint8_t request_length, uint8_t *request_ptr, response_cb *resp_cb);
+int thread_test_diagnostic_command_send(int8_t interface_id, uint8_t *address_ptr, const char *uri_ptr, uint8_t request_length, uint8_t *request_ptr, response_cb *resp_cb);
 
 typedef int (coap_response_cb)(int8_t interface_id, uint8_t message_code, uint8_t message_type, uint8_t *response_ptr, uint16_t response_len);
 

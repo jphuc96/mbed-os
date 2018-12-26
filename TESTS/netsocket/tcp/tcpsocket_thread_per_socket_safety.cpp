@@ -16,7 +16,6 @@
  */
 
 #include "mbed.h"
-#include MBED_CONF_APP_HEADER_FILE
 #include "TCPSocket.h"
 #include "greentea-client/test_env.h"
 #include "unity/unity.h"
@@ -25,21 +24,22 @@
 
 using namespace utest::v1;
 
-namespace
-{
-    static const int SIGNAL_SIGIO1 = 0x1;
-    static const int SIGNAL_SIGIO2 = 0x2;
-    static const int SIGIO_TIMEOUT = 5000; //[ms]
+namespace {
+static const int SIGNAL_SIGIO1 = 0x1;
+static const int SIGNAL_SIGIO2 = 0x2;
+static const int SIGIO_TIMEOUT = 20000; //[ms]
 
-    Thread thread;
-    volatile bool running = true;
+Thread thread(osPriorityNormal, tcp_global::TCP_OS_STACK_SIZE);
+volatile bool running = true;
 }
 
-static void _sigio_handler1(osThreadId id) {
+static void _sigio_handler1(osThreadId id)
+{
     osSignalSet(id, SIGNAL_SIGIO1);
 }
 
-static void _sigio_handler2(osThreadId id) {
+static void _sigio_handler2(osThreadId id)
+{
     osSignalSet(id, SIGNAL_SIGIO2);
 }
 
@@ -47,11 +47,11 @@ static void check_const_len_rand_sequence()
 {
     TCPSocket sock;
     tcpsocket_connect_to_echo_srv(sock);
-    sock.sigio(callback(_sigio_handler1, Thread::gettid()));
+    sock.sigio(callback(_sigio_handler1, ThisThread::get_id()));
 
     static const int BUFF_SIZE = 10;
-    char rx_buff[BUFF_SIZE] = {0};
-    char tx_buff[BUFF_SIZE] = {0};
+    static char rx_buff[BUFF_SIZE] = {0};
+    static char tx_buff[BUFF_SIZE] = {0};
 
 
     int bytes2process;
@@ -61,9 +61,9 @@ static void check_const_len_rand_sequence()
         fill_tx_buffer_ascii(tx_buff, BUFF_SIZE);
         bytes2process = BUFF_SIZE;
         while (bytes2process > 0) {
-            sent = sock.send(&(tx_buff[BUFF_SIZE-bytes2process]), bytes2process);
+            sent = sock.send(&(tx_buff[BUFF_SIZE - bytes2process]), bytes2process);
             if (sent == NSAPI_ERROR_WOULD_BLOCK) {
-                if(osSignalWait(SIGNAL_SIGIO1, SIGIO_TIMEOUT).status == osEventTimeout) {
+                if (osSignalWait(SIGNAL_SIGIO1, SIGIO_TIMEOUT).status == osEventTimeout) {
                     TEST_FAIL();
                     goto END;
                 }
@@ -78,7 +78,7 @@ static void check_const_len_rand_sequence()
 
         bytes2process = BUFF_SIZE;
         while (bytes2process > 0) {
-            recvd = sock.recv(&(rx_buff[BUFF_SIZE-bytes2process]), bytes2process);
+            recvd = sock.recv(&(rx_buff[BUFF_SIZE - bytes2process]), bytes2process);
             if (recvd == NSAPI_ERROR_WOULD_BLOCK) {
                 continue;
             } else if (recvd < 0) {
@@ -104,11 +104,11 @@ static void check_var_len_rand_sequence()
 {
     TCPSocket sock;
     tcpsocket_connect_to_echo_srv(sock);
-    sock.sigio(callback(_sigio_handler2, Thread::gettid()));
+    sock.sigio(callback(_sigio_handler2, ThisThread::get_id()));
 
     static const int BUFF_SIZE = 1001;
-    char rx_buff[BUFF_SIZE];
-    char tx_buff[BUFF_SIZE];
+    static char rx_buff[BUFF_SIZE];
+    static char tx_buff[BUFF_SIZE];
     static const int pkt_size_diff = 100;
 
     int bytes2process;
@@ -118,9 +118,9 @@ static void check_var_len_rand_sequence()
         fill_tx_buffer_ascii(tx_buff, i);
         bytes2process = i;
         while (bytes2process > 0) {
-            sent = sock.send(&(tx_buff[i-bytes2process]), bytes2process);
+            sent = sock.send(&(tx_buff[i - bytes2process]), bytes2process);
             if (sent == NSAPI_ERROR_WOULD_BLOCK) {
-                if(osSignalWait(SIGNAL_SIGIO2, SIGIO_TIMEOUT).status == osEventTimeout) {
+                if (osSignalWait(SIGNAL_SIGIO2, SIGIO_TIMEOUT).status == osEventTimeout) {
                     TEST_FAIL();
                     goto END;
                 }
@@ -130,12 +130,12 @@ static void check_var_len_rand_sequence()
                 TEST_FAIL();
                 goto END;
             }
-           bytes2process -= sent;
+            bytes2process -= sent;
         }
 
         bytes2process = i;
         while (bytes2process > 0) {
-            recvd = sock.recv(&(rx_buff[i-bytes2process]), bytes2process);
+            recvd = sock.recv(&(rx_buff[i - bytes2process]), bytes2process);
             if (recvd == NSAPI_ERROR_WOULD_BLOCK) {
                 continue;
             } else if (recvd < 0) {

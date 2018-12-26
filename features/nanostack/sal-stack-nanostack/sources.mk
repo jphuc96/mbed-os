@@ -11,6 +11,7 @@ SRCS += \
 	source/6LoWPAN/IPHC_Decode/lowpan_context.c \
 	source/6LoWPAN/MAC/beacon_handler.c \
 	source/6LoWPAN/MAC/mac_helper.c \
+	source/6LoWPAN/MAC/mac_ie_lib.c \
 	source/6LoWPAN/MAC/mac_response_handler.c \
 	source/6LoWPAN/MAC/mac_data_poll.c \
 	source/6LoWPAN/MAC/mac_pairwise_key.c \
@@ -84,17 +85,18 @@ SRCS += \
 	source/Security/TLS/tls_lib.c \
 	source/Security/TLS/tls_ccm_crypt.c \
 	source/Service_Libs/CCM_lib/ccm_security.c \
-	source/Service_Libs/fhss/fhss_beacon.c \
-	source/Service_Libs/fhss/fhss_beacon_tasklet.c \
 	source/Service_Libs/fhss/fhss_channel.c \
-	source/Service_Libs/fhss/fhss_mac_interface.c \
 	source/Service_Libs/fhss/fhss_configuration_interface.c \
 	source/Service_Libs/fhss/fhss_statistics.c \
 	source/Service_Libs/fhss/fhss.c \
+	source/Service_Libs/fhss/fhss_ws_empty_functions.c \
+	source/Service_Libs/fhss/fhss_common.c \
 	source/Service_Libs/fhss/channel_list.c \
 	source/Service_Libs/fnv_hash/fnv_hash.c \
+	source/Service_Libs/mac_neighbor_table/mac_neighbor_table.c \
 	source/Service_Libs/mle_service/mle_service.c \
 	source/Service_Libs/mle_service/mle_service_buffer.c \
+	source/Service_Libs/mle_service/mle_service_frame_counter_table.c \
 	source/Service_Libs/mle_service/mle_service_interface.c \
 	source/Service_Libs/mle_service/mle_service_security.c \
 	source/Service_Libs/blacklist/blacklist.c \
@@ -117,13 +119,14 @@ SRCS += \
 	source/6LoWPAN/Thread/thread_common.c \
 	source/6LoWPAN/Thread/thread_joiner_application.c \
 	source/6LoWPAN/Thread/thread_leader_service.c \
+	source/6LoWPAN/Thread/thread_neighbor_class.c \
 	source/6LoWPAN/Thread/thread_management_server.c \
 	source/6LoWPAN/Thread/thread_management_client.c \
 	source/6LoWPAN/Thread/thread_network_synch.c \
 	source/6LoWPAN/Thread/thread_bootstrap.c \
+	source/6LoWPAN/Thread/thread_dhcpv6_server.c \
 	source/6LoWPAN/Thread/thread_host_bootstrap.c \
 	source/6LoWPAN/Thread/thread_router_bootstrap.c \
-	source/6LoWPAN/Thread/thread_dhcpv6_client.c \
 	source/6LoWPAN/Thread/thread_discovery.c \
 	source/6LoWPAN/Thread/thread_commissioning_if.c \
 	source/6LoWPAN/Thread/thread_net_config_api.c \
@@ -140,6 +143,7 @@ SRCS += \
 	source/6LoWPAN/Thread/thread_lowpower_private_api.c \
 	source/6LoWPAN/Thread/thread_nvm_store.c \
 	source/DHCPv6_Server/DHCPv6_Server_service.c \
+	source/DHCPv6_client/dhcpv6_client_service.c \
 	source/libDHCPv6/dhcp_service_api.c \
 	source/libDHCPv6/libDHCPv6.c \
 	source/libDHCPv6/libDHCPv6_server.c \

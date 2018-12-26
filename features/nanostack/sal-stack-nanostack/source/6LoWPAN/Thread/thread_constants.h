@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, Arm Limited and affiliates.
+ * Copyright (c) 2016-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -145,6 +145,7 @@
 #define THREAD_DEFAULT_KEY_SWITCH_GUARD_TIME 624 // Hours
 #define THREAD_DEFAULT_KEY_ROTATION 672 // Hours
 #define THREAD_COMMISSIONER_KEEP_ALIVE_INTERVAL 50000    // Default thread commissioner keep-alive message interval (milliseconds)
+#define THREAD_DELAY_JOIN_ENT 50 // Minimum delay for Joiner router before sending joiner entrust (milliseconds)
 
 #define THREAD_FAILED_CHILD_TRANSMISSIONS 4
 #define THREAD_FAILED_ROUTER_TRANSMISSIONS 4

@@ -204,27 +204,24 @@ static const uint8_t max_payloads_CN470[] = {51, 51, 51, 115, 222, 222};
 static const uint8_t max_payloads_with_repeater_CN470[] = {51, 51, 51, 115, 222, 222};
 
 
-LoRaPHYCN470::LoRaPHYCN470(LoRaWANTimeHandler &lora_time)
-        : LoRaPHY(lora_time)
+LoRaPHYCN470::LoRaPHYCN470()
 {
+    static const uint16_t fsb_mask[] = MBED_CONF_LORA_FSB_MASK_CHINA;
+
     bands[0] = CN470_BAND0;
 
     // Channels
     // 125 kHz channels
-    for( uint8_t i = 0; i < CN470_MAX_NB_CHANNELS; i++ )
-    {
+    for (uint8_t i = 0; i < CN470_MAX_NB_CHANNELS; i++) {
         channels[i].frequency = 470300000 + i * 200000;
-        channels[i].dr_range.value = ( DR_5 << 4 ) | DR_0;
+        channels[i].dr_range.value = (DR_5 << 4) | DR_0;
         channels[i].band = 0;
     }
 
     // Initialize the channels default mask
-    default_channel_mask[0] = 0xFFFF;
-    default_channel_mask[1] = 0xFFFF;
-    default_channel_mask[2] = 0xFFFF;
-    default_channel_mask[3] = 0xFFFF;
-    default_channel_mask[4] = 0xFFFF;
-    default_channel_mask[5] = 0xFFFF;
+    for (uint8_t i = 0; i < CN470_CHANNEL_MASK_SIZE; i++) {
+        default_channel_mask[i] = 0xFFFF & fsb_mask[i];
+    }
 
     // Update the channels mask
     copy_channel_mask(channel_mask, default_channel_mask, CN470_CHANNEL_MASK_SIZE);
@@ -303,7 +300,65 @@ LoRaPHYCN470::~LoRaPHYCN470()
 {
 }
 
-bool LoRaPHYCN470::rx_config(rx_config_params_t* config)
+lorawan_status_t LoRaPHYCN470::set_next_channel(channel_selection_params_t *params,
+                                                uint8_t *channel, lorawan_time_t *time,
+                                                lorawan_time_t *aggregate_timeoff)
+{
+    uint8_t channel_count = 0;
+    uint8_t delay_tx = 0;
+
+    uint8_t enabled_channels[CN470_MAX_NB_CHANNELS] = {0};
+
+    lorawan_time_t next_tx_delay = 0;
+    band_t *band_table = (band_t *) phy_params.bands.table;
+
+    if (num_active_channels(phy_params.channels.mask, 0,
+                            phy_params.channels.mask_size) == 0) {
+
+        // Reactivate default channels
+        copy_channel_mask(phy_params.channels.mask,
+                          phy_params.channels.default_mask,
+                          phy_params.channels.mask_size);
+    }
+
+    if (params->aggregate_timeoff
+            <= _lora_time->get_elapsed_time(params->last_aggregate_tx_time)) {
+        // Reset Aggregated time off
+        *aggregate_timeoff = 0;
+
+        // Update bands Time OFF
+        next_tx_delay = update_band_timeoff(params->joined,
+                                            params->dc_enabled,
+                                            band_table, phy_params.bands.size);
+
+        // Search how many channels are enabled
+        channel_count = enabled_channel_count(params->current_datarate,
+                                              phy_params.channels.mask,
+                                              enabled_channels, &delay_tx);
+    } else {
+        delay_tx++;
+        next_tx_delay = params->aggregate_timeoff -
+                        _lora_time->get_elapsed_time(params->last_aggregate_tx_time);
+    }
+
+    if (channel_count > 0) {
+        // We found a valid channel
+        *channel = enabled_channels[get_random(0, channel_count - 1)];
+        *time = 0;
+        return LORAWAN_STATUS_OK;
+    }
+
+    if (delay_tx > 0) {
+        // Delay transmission due to AggregatedTimeOff or to a band time off
+        *time = next_tx_delay;
+        return LORAWAN_STATUS_DUTYCYCLE_RESTRICTED;
+    }
+
+    *time = 0;
+    return LORAWAN_STATUS_NO_CHANNEL_FOUND;
+}
+
+bool LoRaPHYCN470::rx_config(rx_config_params_t *config)
 {
     int8_t dr = config->datarate;
     uint8_t max_payload = 0;
@@ -319,8 +374,7 @@ bool LoRaPHYCN470::rx_config(rx_config_params_t* config)
 
     _radio->unlock();
 
-    if( config->rx_slot == RX_SLOT_WIN_1 )
-    {
+    if (config->rx_slot == RX_SLOT_WIN_1) {
         // Apply window 1 frequency
         frequency = CN470_FIRST_RX1_CHANNEL + (config->channel % 48) * CN470_STEPWIDTH_RX1_CHANNEL;
     }
@@ -333,7 +387,8 @@ bool LoRaPHYCN470::rx_config(rx_config_params_t* config)
     _radio->set_channel(frequency);
 
     // Radio configuration
-    _radio->set_rx_config(MODEM_LORA, config->bandwidth, phy_dr, 1, 0, 8,
+    _radio->set_rx_config(MODEM_LORA, config->bandwidth, phy_dr, 1, 0,
+                          MBED_CONF_LORA_DOWNLINK_PREAMBLE_LENGTH,
                           config->window_timeout, false, 0, false, 0, 0, true,
                           config->is_rx_continuous);
 
@@ -352,8 +407,8 @@ bool LoRaPHYCN470::rx_config(rx_config_params_t* config)
     return true;
 }
 
-bool LoRaPHYCN470::tx_config(tx_config_params_t* config, int8_t* tx_power,
-                             lorawan_time_t* tx_toa)
+bool LoRaPHYCN470::tx_config(tx_config_params_t *config, int8_t *tx_power,
+                             lorawan_time_t *tx_toa)
 {
     int8_t phy_dr = datarates_CN470[config->datarate];
 
@@ -372,8 +427,9 @@ bool LoRaPHYCN470::tx_config(tx_config_params_t* config, int8_t* tx_power,
 
     _radio->set_channel(channels[config->channel].frequency);
 
-   _radio->set_tx_config(MODEM_LORA, phy_tx_power, 0, 0, phy_dr, 1, 8, false, true,
-                         0, 0, false, 3000);
+    _radio->set_tx_config(MODEM_LORA, phy_tx_power, 0, 0, phy_dr, 1,
+                          MBED_CONF_LORA_UPLINK_PREAMBLE_LENGTH, false, true,
+                          0, 0, false, 3000);
     // Setup maximum payload lenght of the radio driver
     _radio->set_max_payload_length(MODEM_LORA, config->pkt_len);
 
@@ -388,10 +444,10 @@ bool LoRaPHYCN470::tx_config(tx_config_params_t* config, int8_t* tx_power,
     return true;
 }
 
-uint8_t LoRaPHYCN470::link_ADR_request(adr_req_params_t* params,
-                                       int8_t* dr_out, int8_t* tx_power_out,
-                                       uint8_t* nb_rep_out,
-                                       uint8_t* nb_bytes_parsed)
+uint8_t LoRaPHYCN470::link_ADR_request(adr_req_params_t *params,
+                                       int8_t *dr_out, int8_t *tx_power_out,
+                                       uint8_t *nb_rep_out,
+                                       uint8_t *nb_bytes_parsed)
 {
     uint8_t status = 0x07;
     link_adr_params_t adr_settings;
@@ -404,7 +460,7 @@ uint8_t LoRaPHYCN470::link_ADR_request(adr_req_params_t* params,
     // Initialize local copy of channels mask
     copy_channel_mask(temp_channel_masks, channel_mask, CN470_CHANNEL_MASK_SIZE);
 
-    while(bytes_processed < params->payload_size) {
+    while (bytes_processed < params->payload_size) {
 
         // Get ADR request parameters
         next_index = parse_link_ADR_req(&(params->payload[bytes_processed]), &adr_settings);
@@ -422,14 +478,11 @@ uint8_t LoRaPHYCN470::link_ADR_request(adr_req_params_t* params,
         if (adr_settings.ch_mask_ctrl == 6) {
 
             // Enable all 125 kHz channels
-            temp_channel_masks[0] = 0xFFFF;
-            temp_channel_masks[1] = 0xFFFF;
-            temp_channel_masks[2] = 0xFFFF;
-            temp_channel_masks[3] = 0xFFFF;
-            temp_channel_masks[4] = 0xFFFF;
-            temp_channel_masks[5] = 0xFFFF;
+            for (uint8_t i = 0; i < CN470_CHANNEL_MASK_SIZE; i++) {
+                temp_channel_masks[i] = 0xFFFF;
+            }
 
-        } else if( adr_settings.ch_mask_ctrl == 7 ) {
+        } else if (adr_settings.ch_mask_ctrl == 7) {
 
             status &= 0xFE; // Channel mask KO
 
@@ -437,8 +490,8 @@ uint8_t LoRaPHYCN470::link_ADR_request(adr_req_params_t* params,
 
             for (uint8_t i = 0; i < 16; i++) {
 
-                if (((adr_settings.channel_mask & (1 << i)) != 0 ) &&
-                    (channels[adr_settings.ch_mask_ctrl * 16 + i].frequency == 0)) {
+                if (((adr_settings.channel_mask & (1 << i)) != 0) &&
+                        (channels[adr_settings.ch_mask_ctrl * 16 + i].frequency == 0)) {
                     // Trying to enable an undefined channel
                     status &= 0xFE; // Channel mask KO
                 }
@@ -455,7 +508,7 @@ uint8_t LoRaPHYCN470::link_ADR_request(adr_req_params_t* params,
     verify_params.nb_rep = adr_settings.nb_rep;
     verify_params.current_datarate = params->current_datarate;
     verify_params.current_tx_power = params->current_tx_power;
-    verify_params.current_nb_rep = params->current_nb_rep;
+    verify_params.current_nb_rep = params->current_nb_trans;
     verify_params.channel_mask = temp_channel_masks;
 
 
@@ -478,7 +531,7 @@ uint8_t LoRaPHYCN470::link_ADR_request(adr_req_params_t* params,
     return status;
 }
 
-uint8_t LoRaPHYCN470::accept_rx_param_setup_req(rx_param_setup_req_t* params)
+uint8_t LoRaPHYCN470::accept_rx_param_setup_req(rx_param_setup_req_t *params)
 {
     uint8_t status = 0x07;
     uint32_t freq = params->frequency;

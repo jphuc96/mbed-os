@@ -2,6 +2,7 @@
 
 #include "cmsis_os.h"
 
+#include "mbed.h"
 #include "mbed_interface.h"
 #include "mbed_assert.h"
 #include "mbed_shared_queues.h"
@@ -89,14 +90,14 @@ STM32_EMAC::STM32_EMAC()
 {
 }
 
-static osThreadId_t create_new_thread(const char *threadName, void (*thread)(void *arg), void *arg, int stacksize, osPriority_t priority, os_thread_t *thread_cb)
+static osThreadId_t create_new_thread(const char *threadName, void (*thread)(void *arg), void *arg, int stacksize, osPriority_t priority, mbed_rtos_storage_thread_t *thread_cb)
 {
     osThreadAttr_t attr = {0};
     attr.name = threadName;
     attr.stack_mem  = malloc(stacksize);
     attr.cb_mem  = thread_cb;
     attr.stack_size = stacksize;
-    attr.cb_size = sizeof(os_thread_t);
+    attr.cb_size = sizeof(mbed_rtos_storage_thread_t);
     attr.priority = priority;
     return osThreadNew(thread, arg, &attr);
 }
@@ -474,6 +475,8 @@ void mbed_default_mac_address(char *mac)
 
 bool STM32_EMAC::power_up()
 {
+    sleep_manager_lock_deep_sleep();
+
     /* Initialize the hardware */
     if (!low_level_init_successful()) {
         return false;
@@ -556,6 +559,7 @@ void STM32_EMAC::set_all_multicast(bool all)
 void STM32_EMAC::power_down()
 {
     /* No-op at this stage */
+    sleep_manager_unlock_deep_sleep();
 }
 
 void STM32_EMAC::set_memory_manager(EMACMemoryManager &mem_mngr)

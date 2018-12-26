@@ -75,21 +75,11 @@ SECTIONS
     {
         __vector_table = .;
         KEEP(*(.vector_table))
-         . = ALIGN(4);
+         . = ALIGN(8);
     } > VECTORS
 
-    /* Note: The uVisor expects this section at a fixed location, as specified
-             by the porting process configuration parameter: FLASH_OFFSET. */
-    __UVISOR_TEXT_OFFSET = 0x0;
-    __UVISOR_TEXT_START = ORIGIN(FLASH) + __UVISOR_TEXT_OFFSET;
-    .text __UVISOR_TEXT_START :
+    .text :
     {
-        /* uVisor code and data */
-        . = ALIGN(4);
-        __uvisor_main_start = .;
-        *(.uvisor.main)
-        __uvisor_main_end = .;
-
         *(.text*)
 
         KEEP(*(.init))
@@ -134,68 +124,30 @@ SECTIONS
 
     .interrupts_ram :
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         __VECTOR_RAM__ = .;
         __interrupts_ram_start__ = .;   /* Create a global symbol at data start */
         . += M_VECTOR_RAM_SIZE;
-        . = ALIGN(4);
+        . = ALIGN(8);
         __interrupts_ram_end__ = .;     /* Define a global symbol at data end */
-    } > RAM
-
-    /* ensure that uvisor bss is at the beginning of memory */
-    /* Note: The uVisor expects this section at a fixed location, as specified by
-     * the porting process configuration parameter: SRAM_OFFSET. */
-    __UVISOR_SRAM_OFFSET = 0x140;
-    __UVISOR_BSS_START = ORIGIN(RAM) + __UVISOR_SRAM_OFFSET;
-    .uvisor.bss __UVISOR_BSS_START (NOLOAD):
-    {
-        . = ALIGN(32);
-        __uvisor_bss_start = .;
-
-        /* protected uvisor main bss */
-        . = ALIGN(32);
-        __uvisor_bss_main_start = .;
-        KEEP(*(.keep.uvisor.bss.main))
-        . = ALIGN(32);
-        __uvisor_bss_main_end = .;
-
-        /* protected uvisor secure boxes bss */
-        . = ALIGN(32);
-        __uvisor_bss_boxes_start = .;
-        KEEP(*(.keep.uvisor.bss.boxes))
-        . = ALIGN(32);
-        __uvisor_bss_boxes_end = .;
-
-        . = ALIGN((1 << LOG2CEIL(LENGTH(RAM))) / 8);
-        __uvisor_bss_end = .;
-    } > RAM
-
-    /* Heap space for the page allocator */
-    .page_heap (NOLOAD) :
-    {
-        . = ALIGN(32);
-        __uvisor_page_start = .;
-        KEEP(*(.keep.uvisor.page_heap))
-        . = ALIGN(32);
-        __uvisor_page_end = .;
     } > RAM
 
     .data :
     {
         PROVIDE(__etext = LOADADDR(.data));
-        . = ALIGN(4);
+        . = ALIGN(8);
         __data_start__ = .;
         *(vtable)
         *(.data)
         *(.data*)
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* preinit data */
         PROVIDE (__preinit_array_start = .);
         KEEP(*(.preinit_array))
         PROVIDE (__preinit_array_end = .);
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* init data */
         PROVIDE (__init_array_start = .);
         KEEP(*(SORT(.init_array.*)))
@@ -203,46 +155,18 @@ SECTIONS
         PROVIDE (__init_array_end = .);
 
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* finit data */
         PROVIDE (__fini_array_start = .);
         KEEP(*(SORT(.fini_array.*)))
         KEEP(*(.fini_array))
         PROVIDE (__fini_array_end = .);
 
-        . = ALIGN(4);
+        . = ALIGN(8);
         /* All data end */
         __data_end__ = .;
 
     } > RAM AT > FLASH
-
-    /* uvisor configuration data */
-    .uvisor.secure :
-    {
-        . = ALIGN(32);
-        __uvisor_secure_start = .;
-
-        /* uvisor secure boxes configuration tables */
-        . = ALIGN(32);
-        __uvisor_cfgtbl_start = .;
-        KEEP(*(.keep.uvisor.cfgtbl))
-        . = ALIGN(32);
-        __uvisor_cfgtbl_end = .;
-
-        __uvisor_cfgtbl_ptr_start = .;
-        KEEP(*(.keep.uvisor.cfgtbl_ptr_first))
-        KEEP(*(.keep.uvisor.cfgtbl_ptr))
-        __uvisor_cfgtbl_ptr_end = .;
-
-        /* Pointers to all boxes register gateways. These are grouped here to allow
-         * discoverability and firmware verification. */
-        __uvisor_register_gateway_ptr_start = .;
-        KEEP(*(.keep.uvisor.register_gateway_ptr))
-        __uvisor_register_gateway_ptr_end = .;
-
-        . = ALIGN(32);
-        __uvisor_secure_end = .;
-    } > FLASH
 
     /* From now on you can insert any other SRAM region. */
 
@@ -258,13 +182,13 @@ SECTIONS
 
     .bss :
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         __START_BSS = .;
         __bss_start__ = .;
         *(.bss)
         *(.bss*)
         *(COMMON)
-        . = ALIGN(4);
+        . = ALIGN(8);
         __bss_end__ = .;
         __END_BSS = .;
 
@@ -275,14 +199,12 @@ SECTIONS
     .heap :
     {
         . = ALIGN(8);
-        __uvisor_heap_start = .;
         __end__ = .;
         PROVIDE(end = .);
         __HeapBase = .;
         . += HEAP_SIZE;
         __HeapLimit = .;
         __heap_limit = .; /* Add for _sbrk */
-        __uvisor_heap_end = .;
     } > RAM
 
     /* Set stack top to end of RAM, and stack limit move down by
@@ -293,10 +215,5 @@ SECTIONS
 
     /* Check if data + heap + stack exceeds RAM limit */
     ASSERT(__StackLimit >= __HeapLimit, "region RAM overflowed with stack")
-    /* Provide physical memory boundaries for uVisor. */
-    __uvisor_flash_start = ORIGIN(VECTORS);
-    __uvisor_flash_end = ORIGIN(FLASH) + LENGTH(FLASH);
-    __uvisor_sram_start = ORIGIN(RAM);
-    __uvisor_sram_end = ORIGIN(RAM) + LENGTH(RAM);
 
 }   /* End of sections */

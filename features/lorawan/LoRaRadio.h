@@ -166,11 +166,11 @@ typedef struct radio_events {
      */
     mbed::Callback<void()> rx_error;
 
-   /**
-    * FHSS Change Channel callback prototype.
-    *
-    *  @param current_channel   The index number of the current channel.
-    */
+    /**
+     * FHSS Change Channel callback prototype.
+     *
+     *  @param current_channel   The index number of the current channel.
+     */
     mbed::Callback<void(uint8_t current_channel)> fhss_change_channel;
 
     /**
@@ -184,8 +184,7 @@ typedef struct radio_events {
 /**
  *    Interface for the radios, contains the main functions that a radio needs, and five callback functions.
  */
-class LoRaRadio
-{
+class LoRaRadio {
 
 public:
 
@@ -246,7 +245,7 @@ public:
      *  @param rx_continuous Sets the reception in continuous mode.
      *                          [false: single mode, true: continuous mode]
      */
-    virtual void set_rx_config (radio_modems_t modem, uint32_t bandwidth,
+    virtual void set_rx_config(radio_modems_t modem, uint32_t bandwidth,
                                uint32_t datarate, uint8_t coderate,
                                uint32_t bandwidth_afc, uint16_t preamble_len,
                                uint16_t symb_timeout, bool fix_len,
@@ -281,13 +280,13 @@ public:
      *  @param iq_inverted   Inverts IQ signals (LoRa only)
      *                          FSK : N/A (set to 0).
      *                          LoRa: [0: not inverted, 1: inverted]
-     *  @param timeout       The transmission timeout [us].
+     *  @param timeout       The transmission timeout [ms].
      */
     virtual void set_tx_config(radio_modems_t modem, int8_t power, uint32_t fdev,
-                              uint32_t bandwidth, uint32_t datarate,
-                              uint8_t coderate, uint16_t preamble_len,
-                              bool fix_len, bool crc_on, bool freq_hop_on,
-                              uint8_t hop_period, bool iq_inverted, uint32_t timeout) = 0;
+                               uint32_t bandwidth, uint32_t datarate,
+                               uint8_t coderate, uint16_t preamble_len,
+                               bool fix_len, bool crc_on, bool freq_hop_on,
+                               uint8_t hop_period, bool iq_inverted, uint32_t timeout) = 0;
 
     /**
      *  Sends the buffer of size
@@ -300,16 +299,11 @@ public:
     virtual void send(uint8_t *buffer, uint8_t size) = 0;
 
     /**
-     *  Sets the radio in reception mode for a given time.
+     *  Sets the radio in reception mode.
      *
-     *  If the timeout is set to 0, it essentially puts the receiver in continuous mode and it should
-     *  be treated as if in continuous mode. However, an appropriate way to set the receiver in continuous mode is
-     *  to use the `set_rx_config()` API.
-     *
-     *  @param timeout       Reception timeout [ms].
-     *
+     *  For configuration of the receiver use the `set_rx_config()` API.
      */
-    virtual void receive(uint32_t timeout) = 0;
+    virtual void receive(void) = 0;
 
     /**
      *  Sets the carrier frequency

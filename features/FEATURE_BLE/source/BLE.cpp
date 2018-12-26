@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include "ble/BLE.h"
 #include "ble/BLEInstanceBase.h"
+#include "platform/mbed_critical.h"
 
 #if defined(TARGET_OTA_ENABLED)
 #include "ble/services/DFUService.h"
@@ -141,7 +142,8 @@ BLE::initImplementation(FunctionPointerWithContext<InitializationCompleteCallbac
 
 // this stub is required by ARMCC otherwise link will systematically fail
 MBED_WEAK BLEInstanceBase* createBLEInstance() {
-    error("Please provide an implementation for mbed BLE");
+    MBED_ASSERT("No BLE instance implementation.");
+    printf("Please provide an implementation for mbed BLE");
     return NULL;
 }
 
@@ -191,7 +193,7 @@ void defaultSchedulingCallback(BLE::OnEventsToProcessCallbackContext* params) {
 bool BLE::hasInitialized(void) const
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->hasInitialized();
@@ -200,7 +202,7 @@ bool BLE::hasInitialized(void) const
 ble_error_t BLE::shutdown(void)
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     event_signaled = false;
@@ -210,7 +212,7 @@ ble_error_t BLE::shutdown(void)
 const char *BLE::getVersion(void)
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getVersion();
@@ -219,7 +221,7 @@ const char *BLE::getVersion(void)
 const Gap &BLE::gap() const
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getGap();
@@ -228,7 +230,7 @@ const Gap &BLE::gap() const
 Gap &BLE::gap()
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getGap();
@@ -237,7 +239,7 @@ Gap &BLE::gap()
 const GattServer& BLE::gattServer() const
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getGattServer();
@@ -246,7 +248,7 @@ const GattServer& BLE::gattServer() const
 GattServer& BLE::gattServer()
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getGattServer();
@@ -255,7 +257,7 @@ GattServer& BLE::gattServer()
 const GattClient& BLE::gattClient() const
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getGattClient();
@@ -264,7 +266,7 @@ const GattClient& BLE::gattClient() const
 GattClient& BLE::gattClient()
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getGattClient();
@@ -273,7 +275,7 @@ GattClient& BLE::gattClient()
 const SecurityManager& BLE::securityManager() const
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getSecurityManager();
@@ -282,7 +284,7 @@ const SecurityManager& BLE::securityManager() const
 SecurityManager& BLE::securityManager()
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     return transport->getSecurityManager();
@@ -291,7 +293,7 @@ SecurityManager& BLE::securityManager()
 void BLE::waitForEvent(void)
 {
     if (!transport) {
-        error("bad handle to underlying transport");
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
     }
 
     transport->waitForEvent();
@@ -299,15 +301,18 @@ void BLE::waitForEvent(void)
 
 void BLE::processEvents()
 {
+    core_util_critical_section_enter();
     if (event_signaled == false) {
+        core_util_critical_section_exit();
         return;
     }
 
-    if (!transport) {
-        error("bad handle to underlying transport");
-    }
-
     event_signaled = false;
+    core_util_critical_section_exit();
+
+    if (!transport) {
+        MBED_ERROR(MBED_MAKE_ERROR(MBED_MODULE_BLE, MBED_ERROR_CODE_BLE_BACKEND_NOT_INITIALIZED), "bad handle to underlying transport");
+    }
 
     transport->processEvents();
 }
@@ -328,11 +333,14 @@ void BLE::onEventsToProcess(const BLE::OnEventsToProcessCallback_t& callback)
 
 void BLE::signalEventsToProcess()
 {
+    core_util_critical_section_enter();
     if (event_signaled == true) {
+        core_util_critical_section_exit();
         return;
     }
 
     event_signaled = true;
+    core_util_critical_section_exit();
 
     if (whenEventsToProcess) {
         OnEventsToProcessCallbackContext params = {
@@ -382,6 +390,134 @@ ble_error_t BLE::connect(
 ble_error_t BLE::disconnect(Gap::DisconnectionReason_t reason) {
     return gap().disconnect(reason);
 }
+
+Gap::GapState_t BLE::getGapState(void) const {
+    return gap().getState();
+}
+
+void BLE::setAdvertisingType(GapAdvertisingParams::AdvertisingType advType) {
+    gap().setAdvertisingType(advType);
+}
+
+void BLE::setAdvertisingInterval(uint16_t interval) {
+    gap().setAdvertisingInterval(interval);
+}
+
+void BLE::setAdvertisingTimeout(uint16_t timeout) {
+    gap().setAdvertisingTimeout(timeout);
+}
+
+void BLE::setAdvertisingParams(const GapAdvertisingParams &advParams) {
+    gap().setAdvertisingParams(advParams);
+}
+
+const GapAdvertisingParams &BLE::getAdvertisingParams(void) const {
+    return gap().getAdvertisingParams();
+}
+
+ble_error_t BLE::accumulateAdvertisingPayload(uint8_t flags) {
+    return gap().accumulateAdvertisingPayload(flags);
+}
+
+ble_error_t BLE::accumulateAdvertisingPayload(GapAdvertisingData::Appearance app) {
+    return gap().accumulateAdvertisingPayload(app);
+}
+
+ble_error_t BLE::accumulateAdvertisingPayloadTxPower(int8_t power) {
+    return gap().accumulateAdvertisingPayloadTxPower(power);
+}
+
+ble_error_t BLE::accumulateAdvertisingPayload(GapAdvertisingData::DataType type, const uint8_t *data, uint8_t len) {
+    return gap().accumulateAdvertisingPayload(type, data, len);
+}
+
+ble_error_t BLE::setAdvertisingData(const GapAdvertisingData &advData) {
+    return gap().setAdvertisingPayload(advData);
+}
+
+const GapAdvertisingData &BLE::getAdvertisingData(void) const {
+    return gap().getAdvertisingPayload();
+}
+
+void BLE::clearAdvertisingPayload(void) {
+    gap().clearAdvertisingPayload();
+}
+
+ble_error_t BLE::setAdvertisingPayload(void) {
+    return BLE_ERROR_NONE;
+}
+
+ble_error_t BLE::accumulateScanResponse(GapAdvertisingData::DataType type, const uint8_t *data, uint8_t len) {
+    return gap().accumulateScanResponse(type, data, len);
+}
+
+void BLE::clearScanResponse(void) {
+    gap().clearScanResponse();
+}
+
+ble_error_t BLE::startAdvertising(void) {
+    return gap().startAdvertising();
+}
+
+ble_error_t BLE::stopAdvertising(void) {
+    return gap().stopAdvertising();
+}
+
+ble_error_t BLE::setScanParams(uint16_t interval,
+    uint16_t window,
+    uint16_t timeout,
+    bool     activeScanning) {
+    return gap().setScanParams(interval, window, timeout, activeScanning);
+}
+
+ble_error_t BLE::setScanInterval(uint16_t interval) {
+    return gap().setScanInterval(interval);
+}
+
+ble_error_t BLE::setScanWindow(uint16_t window) {
+    return gap().setScanWindow(window);
+}
+
+ble_error_t BLE::setScanTimeout(uint16_t timeout) {
+    return gap().setScanTimeout(timeout);
+}
+
+void BLE::setActiveScan(bool activeScanning) {
+    gap().setActiveScanning(activeScanning);
+}
+
+ble_error_t BLE::startScan(void (*callback)(const Gap::AdvertisementCallbackParams_t *params)) {
+    return gap().startScan(callback);
+}
+
+ble_error_t BLE::disconnect(Gap::Handle_t connectionHandle, Gap::DisconnectionReason_t reason) {
+    return gap().disconnect(connectionHandle, reason);
+}
+
+ble_error_t BLE::updateConnectionParams(Gap::Handle_t handle, const Gap::ConnectionParams_t *params) {
+    return gap().updateConnectionParams(handle, params);
+}
+
+ble_error_t BLE::setTxPower(int8_t txPower) {
+    return gap().setTxPower(txPower);
+}
+
+void BLE::getPermittedTxPowerValues(const int8_t **valueArrayPP, size_t *countP) {
+    gap().getPermittedTxPowerValues(valueArrayPP, countP);
+}
+
+void BLE::onTimeout(Gap::TimeoutEventCallback_t timeoutCallback) {
+    gap().onTimeout(timeoutCallback);
+}
+
+void BLE::onDisconnection(Gap::DisconnectionEventCallback_t disconnectionCallback) {
+    gap().onDisconnection(disconnectionCallback);
+}
+
+void BLE::onRadioNotification(void (*callback)(bool)) {
+    gap().onRadioNotification(callback);
+}
+
 
 BLE_DEPRECATED_API_USE_END
 

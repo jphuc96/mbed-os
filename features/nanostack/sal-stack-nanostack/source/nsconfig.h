@@ -29,7 +29,7 @@
 #endif
 
 #define __ns_cfg_header(x) #x
-#define _ns_cfg_header(x) __ns_cfg_header(configs/x.cfg)
+#define _ns_cfg_header(x) __ns_cfg_header(configs/cfg_##x.h)
 #define ns_cfg_header(x) _ns_cfg_header(x)
 
 
@@ -56,6 +56,12 @@
 #define HAVE_DHCPV6
 #endif
 #endif /* HAVE_THREAD */
+
+#if defined(HAVE_WS)
+#ifndef HAVE_DHCPV6
+#define HAVE_DHCPV6
+#endif
+#endif /* HAVE_WS */
 
 
 #endif // ifndef _NANOSTACK_SOURCE_CONFIG_H

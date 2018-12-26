@@ -18,7 +18,6 @@
 #define EMAC_INTERFACE_H
 
 #include "nsapi.h"
-#include "rtos.h"
 #include "EMAC.h"
 #include "OnboardNetworkStack.h"
 
@@ -33,11 +32,10 @@
  * Drivers derived from EMACInterface should be constructed so that their
  * EMAC is functional without the need to call `connect()`. For example
  * a Wi-Fi driver should permit `WiFi::get_emac().power_up()` as soon as
- * the credentials have been set. This is necessary to support specialised
+ * the credentials have been set. This is necessary to support specialized
  * applications such as 6LoWPAN mesh border routers.
  */
-class EMACInterface : public virtual NetworkInterface
-{
+class EMACInterface : public virtual NetworkInterface {
 public:
     /** Create an EMAC-based network interface.
      *
@@ -52,9 +50,8 @@ public:
      * @param emac  Reference to EMAC to use
      * @param stack Reference to onboard-network stack to use
      */
-    EMACInterface(
-            EMAC &emac = EMAC::get_default_instance(),
-            OnboardNetworkStack &stack = OnboardNetworkStack::get_default_instance());
+    EMACInterface(EMAC &emac = EMAC::get_default_instance(),
+                  OnboardNetworkStack &stack = OnboardNetworkStack::get_default_instance());
 
     /** Set a static IP address
      *
@@ -67,8 +64,7 @@ public:
      *  @param gateway     Null-terminated representation of the local gateway
      *  @return            0 on success, negative error code on failure
      */
-    virtual nsapi_error_t set_network(
-            const char *ip_address, const char *netmask, const char *gateway);
+    virtual nsapi_error_t set_network(const char *ip_address, const char *netmask, const char *gateway);
 
     /** Enable or disable DHCP on the network
      *
@@ -94,7 +90,7 @@ public:
      *  Provided MAC address is intended for info or debug purposes and
      *  may not be provided if the underlying network interface does not
      *  provide a MAC address
-     *  
+     *
      *  @return         Null-terminated representation of the local MAC address
      *                  or null if no MAC address is available
      */
@@ -103,21 +99,21 @@ public:
     /** Get the local IP address
      *
      *  @return         Null-terminated representation of the local IP address
-     *                  or null if no IP address has been recieved
+     *                  or null if no IP address has been received
      */
     virtual const char *get_ip_address();
 
     /** Get the local network mask
      *
-     *  @return         Null-terminated representation of the local network mask 
-     *                  or null if no network mask has been recieved
+     *  @return         Null-terminated representation of the local network mask
+     *                  or null if no network mask has been received
      */
     virtual const char *get_netmask();
 
     /** Get the local gateways
      *
      *  @return         Null-terminated representation of the local gateway
-     *                  or null if no network mask has been recieved
+     *                  or null if no network mask has been received
      */
     virtual const char *get_gateway();
 
@@ -148,16 +144,20 @@ public:
      *
      * @return          Reference to the EMAC in use
      */
-    EMAC &get_emac() const { return _emac; }
+    EMAC &get_emac() const
+    {
+        return _emac;
+    }
 
-    virtual EMACInterface *emacInterface() {
+    virtual EMACInterface *emacInterface()
+    {
         return this;
     }
 
 protected:
     /** Provide access to the underlying stack
      *
-     *  @return The underlying network stack 
+     *  @return The underlying network stack
      */
     virtual NetworkStack *get_stack();
 
@@ -170,7 +170,7 @@ protected:
     char _ip_address[NSAPI_IPv6_SIZE];
     char _netmask[NSAPI_IPv4_SIZE];
     char _gateway[NSAPI_IPv4_SIZE];
-    Callback<void(nsapi_event_t, intptr_t)> _connection_status_cb;
+    mbed::Callback<void(nsapi_event_t, intptr_t)> _connection_status_cb;
 };
 
 #endif

@@ -15,12 +15,16 @@
  * limitations under the License.
  */
 
-#ifndef MBED_CONF_APP_CONNECT_STATEMENT
+#define WIFI 2
+#if !defined(MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE) || \
+    (MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE == WIFI && !defined(MBED_CONF_NSAPI_DEFAULT_WIFI_SSID))
 #error [NOT_SUPPORTED] No network configuration found for this target.
+#endif
+#ifndef MBED_CONF_APP_ECHO_SERVER_ADDR
+#error [NOT_SUPPORTED] Requires parameters from mbed_app.json
 #endif
 
 #include "mbed.h"
-#include MBED_CONF_APP_HEADER_FILE
 #include "greentea-client/test_env.h"
 #include "unity/unity.h"
 #include "utest.h"
@@ -29,29 +33,35 @@
 
 using namespace utest::v1;
 
-namespace
-{
-    NetworkInterface* net;
+namespace {
+NetworkInterface *net;
 }
 
-NetworkInterface* get_interface()
+#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLE
+mbed_stats_socket_t udp_stats[MBED_CONF_NSAPI_SOCKET_STATS_MAX_COUNT];
+#endif
+
+NetworkInterface *get_interface()
 {
     return net;
 }
 
-static void _ifup() {
-    net = MBED_CONF_APP_OBJECT_CONSTRUCTION;
-    nsapi_error_t err = MBED_CONF_APP_CONNECT_STATEMENT;
+static void _ifup()
+{
+    net = NetworkInterface::get_default_instance();
+    nsapi_error_t err = net->connect();
     TEST_ASSERT_EQUAL(NSAPI_ERROR_OK, err);
     printf("MBED: UDPClient IP address is '%s'\n", net->get_ip_address());
 }
 
-static void _ifdown() {
+static void _ifdown()
+{
     net->disconnect();
     printf("MBED: ifdown\n");
 }
 
-void drop_bad_packets(UDPSocket& sock, int orig_timeout) {
+void drop_bad_packets(UDPSocket &sock, int orig_timeout)
+{
     nsapi_error_t err;
     sock.set_timeout(0);
     while (true) {
@@ -65,10 +75,17 @@ void drop_bad_packets(UDPSocket& sock, int orig_timeout) {
 
 void fill_tx_buffer_ascii(char *buff, size_t len)
 {
-    for (size_t i = 0; i<len; ++i) {
+    for (size_t i = 0; i < len; ++i) {
         buff[i] = (rand() % 43) + '0';
     }
 }
+
+#if MBED_CONF_NSAPI_SOCKET_STATS_ENABLE
+int fetch_stats()
+{
+    return SocketStats::mbed_stats_socket_get_each(&udp_stats[0], MBED_CONF_NSAPI_SOCKET_STATS_MAX_COUNT);
+}
+#endif
 
 // Test setup
 utest::v1::status_t greentea_setup(const size_t number_of_cases)
@@ -85,20 +102,20 @@ void greentea_teardown(const size_t passed, const size_t failed, const failure_t
 }
 
 Case cases[] = {
-        Case("UDPSOCKET_ECHOTEST_NONBLOCK", UDPSOCKET_ECHOTEST_NONBLOCK),
-        Case("UDPSOCKET_OPEN_CLOSE_REPEAT", UDPSOCKET_OPEN_CLOSE_REPEAT),
-        Case("UDPSOCKET_OPEN_LIMIT", UDPSOCKET_OPEN_LIMIT),
-        Case("UDPSOCKET_SENDTO_TIMEOUT", UDPSOCKET_SENDTO_TIMEOUT),
+    Case("UDPSOCKET_ECHOTEST_NONBLOCK", UDPSOCKET_ECHOTEST_NONBLOCK),
+    Case("UDPSOCKET_OPEN_CLOSE_REPEAT", UDPSOCKET_OPEN_CLOSE_REPEAT),
+    Case("UDPSOCKET_OPEN_LIMIT", UDPSOCKET_OPEN_LIMIT),
+    Case("UDPSOCKET_SENDTO_TIMEOUT", UDPSOCKET_SENDTO_TIMEOUT),
 #ifdef MBED_EXTENDED_TESTS
-        Case("UDPSOCKET_SENDTO_INVALID", UDPSOCKET_SENDTO_INVALID),
-        Case("UDPSOCKET_ECHOTEST", UDPSOCKET_ECHOTEST),
-        Case("UDPSOCKET_ECHOTEST_BURST", UDPSOCKET_ECHOTEST_BURST),
-        Case("UDPSOCKET_ECHOTEST_BURST_NONBLOCK", UDPSOCKET_ECHOTEST_BURST_NONBLOCK),
-        Case("UDPSOCKET_SENDTO_REPEAT", UDPSOCKET_SENDTO_REPEAT),
+    Case("UDPSOCKET_SENDTO_INVALID", UDPSOCKET_SENDTO_INVALID),
+    Case("UDPSOCKET_ECHOTEST", UDPSOCKET_ECHOTEST),
+    Case("UDPSOCKET_ECHOTEST_BURST", UDPSOCKET_ECHOTEST_BURST),
+    Case("UDPSOCKET_ECHOTEST_BURST_NONBLOCK", UDPSOCKET_ECHOTEST_BURST_NONBLOCK),
+    Case("UDPSOCKET_SENDTO_REPEAT", UDPSOCKET_SENDTO_REPEAT),
 #endif
 };
 
-Specification specification(greentea_setup, cases, greentea_teardown);
+Specification specification(greentea_setup, cases, greentea_teardown, greentea_continue_handlers);
 
 int main()
 {

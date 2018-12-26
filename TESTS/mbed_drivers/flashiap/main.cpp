@@ -16,18 +16,21 @@
  */
 
 #if !DEVICE_FLASH
-    #error [NOT_SUPPORTED] Flash API not supported for this target
+#error [NOT_SUPPORTED] Flash API not supported for this target
 #endif
 
 #include "utest/utest.h"
 #include "utest/utest_serial.h"
 #include "unity/unity.h"
 #include "greentea-client/test_env.h"
+#include "FlashIAP.h"
+#include "unity.h"
 #include <algorithm>
 
 #include "mbed.h"
 
 using namespace utest::v1;
+
 
 void flashiap_init_test()
 {
@@ -52,16 +55,30 @@ void flashiap_program_test()
     TEST_ASSERT_TRUE(sector_size % page_size == 0);
     uint32_t prog_size = std::max(page_size, (uint32_t)8);
     uint8_t *data = new uint8_t[prog_size + 2];
-    for (uint32_t i = 0; i < prog_size + 2; i++) {
-        data[i] = i;
-    }
 
     // the one before the last sector in the system
     uint32_t address = (flash_device.get_flash_start() + flash_device.get_flash_size()) - (sector_size);
     TEST_ASSERT_TRUE(address != 0UL);
+    utest_printf("ROM ends at 0x%lx, test starts at 0x%lx\n", FLASHIAP_ROM_END, address);
+    TEST_SKIP_UNLESS_MESSAGE(address >= FLASHIAP_ROM_END, "Test skipped. Test region overlaps code.");
+
     ret = flash_device.erase(address, sector_size);
     TEST_ASSERT_EQUAL_INT32(0, ret);
 
+    uint8_t erase_val = flash_device.get_erase_value();
+    memset(data, erase_val, prog_size);
+
+    uint8_t *data_flashed = new uint8_t[prog_size];
+    for (uint32_t i = 0; i < sector_size / prog_size; i++) {
+        uint32_t page_addr = address + i * prog_size;
+        ret = flash_device.read(data_flashed, page_addr, prog_size);
+        TEST_ASSERT_EQUAL_INT32(0, ret);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(data, data_flashed, prog_size);
+    }
+
+    for (uint32_t i = 0; i < prog_size + 2; i++) {
+        data[i] = i;
+    }
 
     for (uint32_t i = 0; i < sector_size / prog_size; i++) {
         uint32_t prog_addr = address + i * prog_size;
@@ -69,7 +86,6 @@ void flashiap_program_test()
         TEST_ASSERT_EQUAL_INT32(0, ret);
     }
 
-    uint8_t *data_flashed = new uint8_t[prog_size];
     for (uint32_t i = 0; i < sector_size / prog_size; i++) {
         uint32_t page_addr = address + i * prog_size;
         ret = flash_device.read(data_flashed, page_addr, prog_size);
@@ -93,6 +109,7 @@ void flashiap_program_test()
     TEST_ASSERT_EQUAL_INT32(0, ret);
 }
 
+
 void flashiap_cross_sector_program_test()
 {
     FlashIAP flash_device;
@@ -111,6 +128,7 @@ void flashiap_cross_sector_program_test()
         agg_size += sector_size;
         address -= sector_size;
     }
+    TEST_SKIP_UNLESS_MESSAGE(address >= FLASHIAP_ROM_END, "Test skipped. Test region overlaps code.");
     ret = flash_device.erase(address, agg_size);
     TEST_ASSERT_EQUAL_INT32(0, ret);
 
@@ -166,6 +184,7 @@ void flashiap_program_error_test()
     TEST_ASSERT_TRUE(address != 0UL);
 
     // unaligned address
+    TEST_SKIP_UNLESS_MESSAGE(address >= FLASHIAP_ROM_END, "Test skipped. Test region overlaps code.");
     ret = flash_device.erase(address + 1, sector_size);
     TEST_ASSERT_EQUAL_INT32(-1, ret);
     if (flash_device.get_page_size() > 1) {
@@ -185,7 +204,7 @@ void flashiap_timing_test()
     uint32_t ret = flash_device.init();
     TEST_ASSERT_EQUAL_INT32(0, ret);
     mbed::Timer timer;
-    int num_write_sizes;
+    unsigned int num_write_sizes;
     unsigned int curr_time, byte_usec_ratio;
     unsigned int avg_erase_time = 0;
     unsigned int max_erase_time = 0, min_erase_time = (unsigned int) -1;
@@ -222,7 +241,7 @@ void flashiap_timing_test()
         uint32_t address = base_address;
         unsigned int avg_write_time = 0;
         unsigned int max_write_time = 0, min_write_time = (unsigned int) -1;
-        int num_writes;
+        unsigned int num_writes;
         for (num_writes = 0; num_writes < max_writes; num_writes++) {
             if ((address + write_size) > end_address) {
                 break;
@@ -239,7 +258,7 @@ void flashiap_timing_test()
         delete[] buf;
         avg_write_time /= num_writes;
         utest_printf("Write size %6u bytes: avg %10u, min %10u, max %10u (usec)\n",
-                write_size, avg_write_time, min_write_time, max_write_time);
+                     write_size, avg_write_time, min_write_time, max_write_time);
         byte_usec_ratio = write_size / avg_write_time;
         TEST_ASSERT(byte_usec_ratio < max_byte_usec_ratio);
         write_size *= 4;
@@ -248,7 +267,7 @@ void flashiap_timing_test()
     if (num_write_sizes) {
         avg_erase_time /= num_write_sizes;
         utest_printf("\nErase size %6u bytes: avg %10u, min %10u, max %10u (usec)\n\n",
-                sector_size, avg_erase_time, min_erase_time, max_erase_time);
+                     sector_size, avg_erase_time, min_erase_time, max_erase_time);
         byte_usec_ratio = sector_size / avg_erase_time;
         TEST_ASSERT(byte_usec_ratio < max_byte_usec_ratio);
     }
@@ -266,13 +285,15 @@ Case cases[] = {
     Case("FlashIAP - timing", flashiap_timing_test),
 };
 
-utest::v1::status_t greentea_test_setup(const size_t number_of_cases) {
+utest::v1::status_t greentea_test_setup(const size_t number_of_cases)
+{
     GREENTEA_SETUP(120, "default_auto");
     return greentea_test_setup_handler(number_of_cases);
 }
 
 Specification specification(greentea_test_setup, cases, greentea_test_teardown_handler);
 
-int main() {
+int main()
+{
     Harness::run(specification);
 }

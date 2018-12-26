@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014-2017, Arm Limited and affiliates.
+ * Copyright (c) 2014-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -72,6 +72,7 @@ typedef struct thread_network_data_temporary_route_or_dhcpv6_server_entry_s {
     bool                stableData: 1;
     bool                P_on_mesh: 1;
     bool                P_nd_dns: 1;
+    bool                P_res1: 1;
     bool                canDelete: 1;
     ns_list_link_t      link;               /*!< List link entry */
 } thread_network_server_data_entry_t;
@@ -87,6 +88,7 @@ typedef struct thread_border_router_tlv_entry_t {
     bool                stableData: 1;      /* P_stable */
     bool                P_on_mesh: 1;       /* P_on_mesh */
     bool                P_nd_dns: 1;        /* P_nd_dns */
+    bool                P_res1: 1;        /* P_res1 */
 } thread_border_router_tlv_entry_t;
 
 typedef struct thread_prefix_tlv {
@@ -136,16 +138,17 @@ typedef struct thread_network_local_data_entry_s {
     uint8_t           servicesPrefixLen;    /*!< Prefix length in bits This Can Be 1-128 */
     bool                routeActive: 1;
     bool                routeDataStable: 1;
+    bool                brActive: 1;
     bool                dhcpv6ServerActive: 1;
-    bool                dhcpv6ServerDataStable: 1;
+    bool                brDataStable: 1;
     bool                slaacServerActive: 1;
-    bool                slaacServerDataStable: 1;
     bool                slaacPreferred: 1;
     unsigned            preference: 2;
     bool                configure: 1;
     bool                defaultRoute: 1;
     bool                onMesh: 1;
     bool                ndDns: 1;
+    bool                res1: 1;
     ns_list_link_t      link;               /*!< List link entry */
 } thread_network_local_data_entry_t;
 
@@ -184,9 +187,9 @@ typedef struct thread_network_local_data_cache_entry_s {
     thread_network_data_prefix_list_t prefix_list; /*!< Local parsed or generated service list */
     thread_network_data_service_list_t service_list;
     uint16_t registered_rloc16;/*!< Address used for latest registration */
-    bool release_old_address:1;/*!< true if network data  can be released from old address */
-    bool publish_active:1;/*!< true when publish is active */
-    bool publish_pending:1;/*!< true when publish attempt made during active publish */
+    uint16_t publish_coap_req_id;/*!< Non-zero when publish is active */
+    bool release_old_address: 1; /*!< true if network data  can be released from old address */
+    bool publish_pending: 1; /*!< true when publish attempt made during active publish */
 } thread_network_local_data_cache_entry_t;
 
 /**
@@ -207,7 +210,7 @@ bool thread_network_data_router_id_free(thread_network_data_cache_entry_t *cache
 
 void thread_network_local_data_free_and_clean(thread_network_local_data_cache_entry_t *cachePtr, int8_t interface_id);
 
-void thread_network_data_context_re_use_timer_update(thread_network_data_cache_entry_t *cachePtr, uint32_t ticks, lowpan_context_list_t *context_list);
+void thread_network_data_context_re_use_timer_update(int8_t id, thread_network_data_cache_entry_t *cachePtr, uint32_t ticks, lowpan_context_list_t *context_list);
 
 /**
  * Add new route information to route List
@@ -341,8 +344,8 @@ uint8_t *thread_network_data_prefix_set_write(thread_network_data_cache_entry_t 
 uint8_t *thread_network_data_service_set_write(thread_network_data_cache_entry_t *networkDataList, uint8_t *ptr);
 bool thread_network_data_service_hosted_by_this_router_id(thread_network_data_service_cache_entry_t *dataList, uint16_t router_id);
 uint16_t thread_network_data_service_child_id_from_networkdata_get(thread_network_data_cache_entry_t *networkDataList, uint16_t router_short_addr);
-
-uint8_t * thread_nd_own_service_list_data_write(thread_network_local_data_cache_entry_t *serverDataList, uint8_t *ptr, uint16_t routerID);
+thread_network_data_prefix_cache_entry_t *thread_prefix_entry_find(thread_network_prefix_list_t *list, thread_prefix_tlv_t *prefixTlv);
+uint8_t *thread_nd_own_service_list_data_write(thread_network_local_data_cache_entry_t *serverDataList, uint8_t *ptr, uint16_t routerID);
 
 uint16_t thread_nd_own_service_list_data_size(thread_network_local_data_cache_entry_t *serverDataList);
 

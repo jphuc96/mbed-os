@@ -35,7 +35,10 @@ private:
     EthernetInterface(NanostackEthernetPhy &phy) : Interface(phy) {}
     nsapi_error_t initialize();
 protected:
-    NanostackEthernetPhy &get_phy() const { return static_cast<NanostackEthernetPhy &>(Interface::get_phy()); }
+    NanostackEthernetPhy &get_phy() const
+    {
+        return static_cast<NanostackEthernetPhy &>(Interface::get_phy());
+    }
 };
 
 /** Ethernet interface for Nanostack.
@@ -49,20 +52,12 @@ public:
 
     nsapi_error_t initialize(NanostackEthernetPhy *phy);
 
-    /** Start the interface
-     *
-     *  @return     0 on success, negative on failure
-     */
-    virtual nsapi_error_t connect();
-
-    /** Stop the interface
-     *
-     *  @return     0 on success, negative on failure
-     */
-    virtual nsapi_error_t disconnect();
-
 protected:
-    Nanostack::EthernetInterface *get_interface() const { return static_cast<Nanostack::EthernetInterface *>(_interface); }
+    Nanostack::EthernetInterface *get_interface() const
+    {
+        return static_cast<Nanostack::EthernetInterface *>(_interface);
+    }
+    virtual nsapi_error_t do_initialize();
 
 };
 

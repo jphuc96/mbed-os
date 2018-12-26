@@ -52,10 +52,10 @@ class LoRaPHYIN865 : public LoRaPHY {
 
 public:
 
-    LoRaPHYIN865(LoRaWANTimeHandler &lora_time);
+    LoRaPHYIN865();
     virtual ~LoRaPHYIN865();
 
-    virtual uint8_t apply_DR_offset(int8_t dr, int8_t dr_offset );
+    virtual uint8_t apply_DR_offset(int8_t dr, int8_t dr_offset);
 
 private:
     /*!

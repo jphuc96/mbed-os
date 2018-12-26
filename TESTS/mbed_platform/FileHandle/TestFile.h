@@ -18,14 +18,13 @@
 
 #include "platform/FileHandle.h"
 
-
 #define POS_IS_VALID(pos) (pos >= 0 && pos < _end)
 #define NEW_POS_IS_VALID(pos) (pos >= 0 && pos < (int32_t)FILE_SIZE)
 #define SEEK_POS_IS_VALID(pos) (pos >= 0 && pos <= _end)
 #define INVALID_POS (-1)
 
 template<uint32_t FILE_SIZE>
-class TestFile : public FileHandle {
+class TestFile : public mbed::FileHandle {
 public:
     TestFile(): _pos(0), _end(0) {}
     ~TestFile() {}
@@ -39,10 +38,9 @@ public:
         ssize_t read;
         _fnCalled = fnRead;
 
-        for(read = 0; (size_t)read < size; read++)
-        {
-            if(POS_IS_VALID(_pos)) {
-                ((uint8_t*)buffer)[read] = _data[_pos++];
+        for (read = 0; (size_t)read < size; read++) {
+            if (POS_IS_VALID(_pos)) {
+                ((uint8_t *)buffer)[read] = _data[_pos++];
             } else {
                 break;
             }
@@ -55,17 +53,16 @@ public:
         ssize_t written;
         _fnCalled = fnWrite;
 
-        for(written = 0; (size_t)written < size; written++)
-        {
-            if(NEW_POS_IS_VALID(_pos)) {
-                _data[_pos++] = ((uint8_t*)buffer)[written];
+        for (written = 0; (size_t)written < size; written++) {
+            if (NEW_POS_IS_VALID(_pos)) {
+                _data[_pos++] = ((uint8_t *)buffer)[written];
             } else {
-                if(0 == written) {
+                if (0 == written) {
                     return -ENOSPC;
                 }
                 break;
             }
-            if(_end < _pos) {
+            if (_end < _pos) {
                 _end++;
             }
         } // for
@@ -77,8 +74,7 @@ public:
         _fnCalled = fnSeek;
         int32_t new_pos = INVALID_POS;
 
-        switch(whence)
-        {
+        switch (whence) {
             case SEEK_SET:
                 new_pos = offset;
                 break;
@@ -96,7 +92,7 @@ public:
                 break;
         }
 
-        if(SEEK_POS_IS_VALID(new_pos)) {
+        if (SEEK_POS_IS_VALID(new_pos)) {
             _pos = new_pos;
         } else {
             return -EINVAL;

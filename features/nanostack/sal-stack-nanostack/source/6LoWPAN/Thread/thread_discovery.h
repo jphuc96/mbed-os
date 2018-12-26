@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2017, Arm Limited and affiliates.
+ * Copyright (c) 2016-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,8 +43,8 @@ typedef struct discovery_response_list {
     uint16_t commissioner_port;
     uint8_t channel;
     int8_t dbm;
-    unsigned version:4;
-    unsigned steering_data_valid:5;
+    unsigned version: 4;
+    unsigned steering_data_valid: 5;
 
     ns_list_link_t link;
 } discovery_response_list_t;
@@ -62,7 +62,7 @@ typedef struct {
     uint8_t *extented_pan_id;
     uint8_t *network_name;
     uint16_t pan_id;
-    unsigned version:4;
+    unsigned version: 4;
 } discover_server_info_t;
 
 /**
@@ -70,7 +70,7 @@ typedef struct {
  */
 typedef struct {
     uint32_t channel_mask;
-    bool joiner_flag:1;
+    bool joiner_flag: 1;
     bool native_commisioner; //Set for native commisioner
     uint8_t filter_tlv_length; //Optional Filter data length
     uint8_t *filter_tlv_data; //Pointer for filter specific data
@@ -122,7 +122,7 @@ int thread_discovery_responser_enable(int8_t interface_id, bool enable_service);
 /**
  * Start Thread network discovery
  */
-int thread_discovery_network_scan(int8_t interface_id, thread_discover_reques_t *scan_request, thread_discovery_ready_cb *ready_cb);
+int thread_discovery_network_scan(struct protocol_interface_info_entry *cur_interface, thread_discover_reques_t *scan_request, thread_discovery_ready_cb *ready_cb);
 
 /**
  * Start device orphan scan

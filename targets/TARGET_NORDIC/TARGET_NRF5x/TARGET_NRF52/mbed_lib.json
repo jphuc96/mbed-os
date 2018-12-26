@@ -1,10 +1,6 @@
 {
     "name": "nordic",
     "config": {
-        "uart_timeout_us": {
-            "help": "Idle time in micro seconds between characters before buffer is flushed.",
-            "value": 2000
-        },
         "uart_0_fifo_size": {
             "help": "UART0 FIFO buffer. FIFO buffer is filled from DMA buffer.",
             "value": 32
@@ -12,10 +8,6 @@
         "uart_1_fifo_size": {
             "help": "UART1 FIFO buffer. FIFO buffer is filled from DMA buffer.",
             "value": 32
-        },
-        "uart_dma_size": {
-            "help": "UART DMA buffer. 2 buffers per instance. DMA buffer is filled by UARTE",
-            "value": 8
         }
     },
     "macros": [
@@ -63,7 +55,7 @@
                 "NRF52_PAN_64"
             ],
             "target.lf_clock_src": "NRF_LF_SRC_RC",
-            "target.console-uart-flow-control": "RTSCTS"
+            "target.console-uart-flow-control": null
         },
         "MTB_UBLOX_NINA_B1": {
             "target.macros_add": [
@@ -84,7 +76,7 @@
                 "NRF52_PAN_64"
             ]
         },
-        "NRF52_DK": {
+        "MTB_MURATA_WSM_BL241": {
             "target.macros_add": [
                 "CONFIG_GPIO_AS_PINRESET",
                 "NRF52_PAN_12",
@@ -102,7 +94,27 @@
                 "NRF52_PAN_63",
                 "NRF52_PAN_64"
             ],
-            "target.console-uart-flow-control": "RTSCTS"
+            "target.lf_clock_src": "NRF_LF_SRC_XTAL",
+            "target.console-uart-flow-control": null
+        },
+        "NRF52_DK": {
+            "target.macros_add": [
+                "CONFIG_GPIO_AS_PINRESET",
+                "NRF52_PAN_12",
+                "NRF52_PAN_15",
+                "NRF52_PAN_20",
+                "NRF52_PAN_30",
+                "NRF52_PAN_31",
+                "NRF52_PAN_36",
+                "NRF52_PAN_51",
+                "NRF52_PAN_53",
+                "NRF52_PAN_54",
+                "NRF52_PAN_55",
+                "NRF52_PAN_58",
+                "NRF52_PAN_62",
+                "NRF52_PAN_63",
+                "NRF52_PAN_64"
+            ]
         },
         "RBLAB_BLENANO2": {
             "target.macros_add": [
@@ -186,8 +198,15 @@
             "target.macros_add": [
                 "CONFIG_GPIO_AS_PINRESET",
                 "NRF52_ERRATA_20"
+            ]
+        },
+        "MTB_LAIRD_BL654": {
+            "target.macros_add": [
+                "CONFIG_GPIO_AS_PINRESET",
+                "NRF52_ERRATA_20"
             ],
-            "target.console-uart-flow-control": "RTSCTS"
+            "target.lf_clock_src": "NRF_LF_SRC_RC",
+            "target.console-uart-flow-control": null
         }
     }
 }

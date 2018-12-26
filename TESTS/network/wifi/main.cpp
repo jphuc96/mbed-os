@@ -15,8 +15,10 @@
  * limitations under the License.
  */
 
-#ifndef MBED_CONF_APP_OBJECT_CONSTRUCTION
-    #error [NOT_SUPPORTED] No network interface found for this target.
+#define WIFI 2
+#if !defined(MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE) || \
+    MBED_CONF_TARGET_NETWORK_DEFAULT_INTERFACE_TYPE != WIFI
+#error [NOT_SUPPORTED] No network configuration found for this target.
 #endif
 
 #include "mbed.h"
@@ -48,7 +50,8 @@
 
 using namespace utest::v1;
 
-utest::v1::status_t test_setup(const size_t number_of_cases) {
+utest::v1::status_t test_setup(const size_t number_of_cases)
+{
     GREENTEA_SETUP(240, "default_auto");
     return verbose_test_setup_handler(number_of_cases);
 }
@@ -87,9 +90,10 @@ Case cases[] = {
 #endif
 };
 
-Specification specification(test_setup, cases);
+Specification specification(test_setup, cases, greentea_continue_handlers);
 
 // Entry point into the tests
-int main() {
+int main()
+{
     return !Harness::run(specification);
 }

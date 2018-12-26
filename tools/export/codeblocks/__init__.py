@@ -35,7 +35,8 @@ class CodeBlocks(GccArm):
     PREPROCESS_ASM = False
 
     POST_BINARY_WHITELIST = set([
-        "NCS36510TargetCode.ncs36510_addfib"
+        "NCS36510TargetCode.ncs36510_addfib",
+        "PSOC6Code.complete"
     ])
 
     @staticmethod
@@ -90,8 +91,7 @@ class CodeBlocks(GccArm):
                                             not x.startswith('obj'))];
 
         c_sources = sorted([self.filter_dot(s) for s in self.resources.c_sources])
-        libraries = [self.prepare_lib(basename(lib)) for lib
-                     in self.resources.libraries]
+        libraries = [self.prepare_lib(basename(lib)) for lib in self.libraries]
         sys_libs = [self.prepare_sys_lib(lib) for lib
                     in self.toolchain.sys_libs]
         ncs36510fib = (hasattr(self.toolchain.target, 'post_binary_hook') and
@@ -133,7 +133,9 @@ class CodeBlocks(GccArm):
             'NRF51_DK_LEGACY': 'board/nordic_nrf51_dk.cfg',
             'NRF51_DK_BOOT': 'board/nordic_nrf51_dk.cfg',
             'NRF51_DK_OTA': 'board/nordic_nrf51_dk.cfg',
-            'NRF51_DK': 'board/nordic_nrf51_dk.cfg'
+            'NRF51_DK': 'board/nordic_nrf51_dk.cfg',
+            'FUTURE_SEQUANA': 'board/cy8ckit_062_ble.cfg',
+            'FUTURE_SEQUANA_M0': 'board/cy8ckit_062_ble.cfg'
             }
 
         if self.target in openocd_board:
@@ -163,7 +165,7 @@ class CodeBlocks(GccArm):
             if ignorefiles:
                 with open(self.gen_file_dest('.mbedignore'), 'a') as f:
                     for fi in ignorefiles:
-                        f.write("%s\n" % fi)                
+                        f.write("%s\n" % fi)
 
         # finally, generate the project file
         super(CodeBlocks, self).generate()

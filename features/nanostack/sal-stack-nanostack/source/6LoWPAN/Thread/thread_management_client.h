@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2017, Arm Limited and affiliates.
+ * Copyright (c) 2015-2018, Arm Limited and affiliates.
  * SPDX-License-Identifier: BSD-3-Clause
  *
  * Redistribution and use in source and binary forms, with or without
@@ -64,12 +64,6 @@ void thread_management_client_init(int8_t interface_id);
  * When this is called all addressed assigned by this module are removed from stack.
  */
 void thread_management_client_delete(int8_t interface_id);
-
-/** Get service id of management service.
- *
- * When using Coap Management port service this service is the only instance used to make client transactions.
- */
-int8_t thread_management_client_service_id_get(int8_t interface_id);
 
 /** Router id handler callback.
  *
@@ -148,6 +142,15 @@ int thread_management_client_network_data_unregister(int8_t interface_id, uint16
  */
 int thread_management_client_neighbor_discovery_data_request(int8_t interface_id, const uint8_t destination[16],  const uint8_t *options, uint8_t options_len, thread_management_client_network_data_set_cb *set_cb);
 
+/** Get interface_id of based on coap service_id
+ *
+ *
+ * /param service_id coap service id.
+ *
+ *return interface_id of thread instance if successful and -1 for failure
+ */
+int thread_management_client_get_interface_id_by_service_id(int8_t service_id);
+
 /** send active configuration dataset get for parent
  *
  * /param interface_id interface id of this thread instance.
@@ -204,9 +207,20 @@ int thread_management_client_provision_request(int8_t interface_id, uint8_t *dst
  */
 void thread_management_client_proactive_an(int8_t interface_id, const uint8_t address[16], const uint16_t rloc, const uint8_t ml_eid[8], const uint8_t dst_addr[16]);
 
-/** Kill pending COAP requests.
+/** Delete COAP message .
+ *
+ * Delete COAP message that is sent to COAP service.
+ *
+ *  \param interface_id interface id of this Thread instance.
+ *  \param coap_message_id COAP message to be deleted.
+ */
+void thread_management_client_coap_message_delete(int8_t interface_id, uint16_t coap_message_id);
+
+/** Clear old partition data.
+ *
+ * Clear data related to old partition, like pending COAP transactions.
  *
  *  \param interface_id interface id of this Thread instance.
  */
-void thread_management_client_pending_coap_request_kill(int8_t interface_id);
+void thread_management_client_old_partition_data_clean(int8_t interface_id);
 #endif /* THREAD_MANAGEMENT_CLIENT_H_ */

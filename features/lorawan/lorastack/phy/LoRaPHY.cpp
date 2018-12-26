@@ -35,9 +35,9 @@ SPDX-License-Identifier: BSD-3-Clause
 
 #define CHANNELS_IN_MASK  16
 
-LoRaPHY::LoRaPHY(LoRaWANTimeHandler &lora_time)
+LoRaPHY::LoRaPHY()
     : _radio(NULL),
-      _lora_time(lora_time)
+      _lora_time(NULL)
 {
     memset(&phy_params, 0, sizeof(phy_params));
 }
@@ -45,6 +45,11 @@ LoRaPHY::LoRaPHY(LoRaWANTimeHandler &lora_time)
 LoRaPHY::~LoRaPHY()
 {
     _radio = NULL;
+}
+
+void LoRaPHY::initialize(LoRaWANTimeHandler *lora_time)
+{
+    _lora_time = lora_time;
 }
 
 bool LoRaPHY::mask_bit_test(const uint16_t *mask, unsigned bit)
@@ -88,14 +93,10 @@ void LoRaPHY::setup_public_network_mode(bool set)
     _radio->unlock();
 }
 
-void LoRaPHY::setup_rx_window(bool rx_continuous, uint32_t max_rx_window)
+void LoRaPHY::handle_receive(void)
 {
     _radio->lock();
-    if (!rx_continuous) {
-        _radio->receive(max_rx_window);
-    } else {
-        _radio->receive(0); // Continuous mode
-    }
+    _radio->receive();
     _radio->unlock();
 }
 
@@ -164,19 +165,18 @@ int32_t LoRaPHY::get_random(int32_t min, int32_t max)
     return (int32_t) rand() % (max - min + 1) + min;
 }
 
-bool LoRaPHY::verify_channel_DR(uint8_t nb_channels, uint16_t *channel_mask,
-                                int8_t dr, int8_t min_dr, int8_t max_dr,
-                                channel_params_t *channels)
+bool LoRaPHY::verify_channel_DR(uint16_t *channel_mask, int8_t dr)
 {
-    if (val_in_range(dr, min_dr, max_dr) == 0) {
+    if (val_in_range(dr, phy_params.min_tx_datarate,
+                     phy_params.max_tx_datarate) == 0) {
         return false;
     }
 
     for (uint8_t i = 0; i < phy_params.max_channel_cnt; i++) {
         if (mask_bit_test(channel_mask, i)) {
             // Check datarate validity for enabled channels
-            if (val_in_range(dr, (channels[i].dr_range.fields.min & 0x0F),
-                             (channels[i].dr_range.fields.max & 0x0F))) {
+            if (val_in_range(dr, (phy_params.channels.channel_list[i].dr_range.fields.min & 0x0F),
+                             (phy_params.channels.channel_list[i].dr_range.fields.max & 0x0F))) {
                 // At least 1 channel has been found we can return OK.
                 return true;
             }
@@ -270,11 +270,10 @@ lorawan_time_t LoRaPHY::update_band_timeoff(bool joined, bool duty_cycle,
 
     // Update bands Time OFF
     for (uint8_t i = 0; i < nb_bands; i++) {
-
-        if (joined == false) {
-            uint32_t txDoneTime =  MAX(_lora_time.get_elapsed_time(bands[i].last_join_tx_time),
+        if (MBED_CONF_LORA_DUTY_CYCLE_ON_JOIN && joined == false) {
+            uint32_t txDoneTime =  MAX(_lora_time->get_elapsed_time(bands[i].last_join_tx_time),
                                        (duty_cycle == true) ?
-                                       _lora_time.get_elapsed_time(bands[i].last_tx_time) : 0);
+                                       _lora_time->get_elapsed_time(bands[i].last_tx_time) : 0);
 
             if (bands[i].off_time <= txDoneTime) {
                 bands[i].off_time = 0;
@@ -283,17 +282,16 @@ lorawan_time_t LoRaPHY::update_band_timeoff(bool joined, bool duty_cycle,
             if (bands[i].off_time != 0) {
                 next_tx_delay = MIN(bands[i].off_time - txDoneTime, next_tx_delay);
             }
-
         } else {
             // if network has been joined
             if (duty_cycle == true) {
 
-                if (bands[i].off_time <= _lora_time.get_elapsed_time(bands[i].last_tx_time)) {
+                if (bands[i].off_time <= _lora_time->get_elapsed_time(bands[i].last_tx_time)) {
                     bands[i].off_time = 0;
                 }
 
                 if (bands[i].off_time != 0) {
-                    next_tx_delay = MIN(bands[i].off_time - _lora_time.get_elapsed_time(bands[i].last_tx_time),
+                    next_tx_delay = MIN(bands[i].off_time - _lora_time->get_elapsed_time(bands[i].last_tx_time),
                                         next_tx_delay);
                 }
             } else {
@@ -359,16 +357,13 @@ uint8_t LoRaPHY::verify_link_ADR_req(verify_adr_params_t *verify_params,
 
     if (status != 0) {
         // Verify channel datarate
-        if (verify_channel_DR(phy_params.max_channel_cnt, verify_params->channel_mask,
-                              datarate, phy_params.min_tx_datarate,
-                              phy_params.max_tx_datarate, phy_params.channels.channel_list)
-                == false) {
+        if (verify_channel_DR(verify_params->channel_mask, datarate) == false) {
             status &= 0xFD; // Datarate KO
         }
 
         // Verify tx power
         if (val_in_range(tx_power, phy_params.max_tx_power,
-                         phy_params.min_tx_power) == 0) {
+                         phy_params.min_tx_power) == false) {
             // Verify if the maximum TX power is exceeded
             if (phy_params.max_tx_power > tx_power) {
                 // Apply maximum TX power. Accept TX power.
@@ -409,7 +404,7 @@ void LoRaPHY::get_rx_window_params(double t_symb, uint8_t min_rx_symb,
 {
     // Computed number of symbols
     *window_timeout = MAX((uint32_t) ceil(((2 * min_rx_symb - 8) * t_symb + 2 * rx_error) / t_symb), min_rx_symb);
-    *window_offset = (int32_t) ceil((4.0 * t_symb) - ((*window_timeout * t_symb) / 2.0 ) - wakeup_time);
+    *window_offset = (int32_t) ceil((4.0 * t_symb) - ((*window_timeout * t_symb) / 2.0) - wakeup_time);
 }
 
 int8_t LoRaPHY::compute_tx_power(int8_t tx_power_idx, float max_eirp,
@@ -451,7 +446,7 @@ uint8_t LoRaPHY::get_bandwidth(uint8_t dr)
     }
 }
 
-uint8_t LoRaPHY::enabled_channel_count(bool joined, uint8_t datarate,
+uint8_t LoRaPHY::enabled_channel_count(uint8_t datarate,
                                        const uint16_t *channel_mask,
                                        uint8_t *channel_indices,
                                        uint8_t *delayTx)
@@ -514,7 +509,9 @@ void LoRaPHY::reset_to_default_values(loramac_protocol_params *params, bool init
 
     params->sys_params.channel_tx_power = get_default_tx_power();
 
-    params->sys_params.channel_data_rate = get_default_tx_datarate();
+    // We shall always start with highest achievable data rate.
+    // Subsequent decrease in data rate will mean increase in range henceforth.
+    params->sys_params.channel_data_rate = get_default_max_tx_datarate();
 
     params->sys_params.rx1_dr_offset = phy_params.default_rx1_dr_offset;
 
@@ -558,6 +555,11 @@ uint8_t LoRaPHY::get_minimum_tx_datarate()
 uint8_t LoRaPHY::get_default_tx_datarate()
 {
     return phy_params.default_datarate;
+}
+
+uint8_t  LoRaPHY::get_default_max_tx_datarate()
+{
+    return phy_params.default_max_datarate;
 }
 
 uint8_t LoRaPHY::get_default_tx_power()
@@ -805,6 +807,11 @@ void LoRaPHY::compute_rx_win_params(int8_t datarate, uint8_t min_rx_symbols,
                                              ((uint32_t *)phy_params.bandwidths.table)[rx_conf_params->datarate]);
     }
 
+    if (rx_conf_params->rx_slot == RX_SLOT_WIN_1) {
+        rx_conf_params->frequency = phy_params.channels.channel_list[rx_conf_params->channel].frequency;
+    }
+
+
     get_rx_window_params(t_symbol, min_rx_symbols, rx_error, RADIO_WAKEUP_TIME,
                          &rx_conf_params->window_timeout, &rx_conf_params->window_offset);
 }
@@ -816,15 +823,6 @@ bool LoRaPHY::rx_config(rx_config_params_t *rx_conf)
     uint8_t max_payload = 0;
     uint8_t phy_dr = 0;
     uint32_t frequency = rx_conf->frequency;
-
-    _radio->lock();
-
-    if (_radio->get_status() != RF_IDLE) {
-        _radio->unlock();
-        return false;
-    }
-
-    _radio->unlock();
 
     if (rx_conf->rx_slot == RX_SLOT_WIN_1) {
         // Apply window 1 frequency
@@ -854,7 +852,8 @@ bool LoRaPHY::rx_config(rx_config_params_t *rx_conf)
                               false, rx_conf->is_rx_continuous);
     } else {
         modem = MODEM_LORA;
-        _radio->set_rx_config(modem, rx_conf->bandwidth, phy_dr, 1, 0, 8,
+        _radio->set_rx_config(modem, rx_conf->bandwidth, phy_dr, 1, 0,
+                              MBED_CONF_LORA_DOWNLINK_PREAMBLE_LENGTH,
                               rx_conf->window_timeout, false, 0, false, 0, 0,
                               true, rx_conf->is_rx_continuous);
     }
@@ -904,7 +903,8 @@ bool LoRaPHY::tx_config(tx_config_params_t *tx_conf, int8_t *tx_power,
                               3000);
     } else {
         modem = MODEM_LORA;
-        _radio->set_tx_config(modem, phy_tx_power, 0, bandwidth, phy_dr, 1, 8,
+        _radio->set_tx_config(modem, phy_tx_power, 0, bandwidth, phy_dr, 1,
+                              MBED_CONF_LORA_UPLINK_PREAMBLE_LENGTH,
                               false, true, 0, 0, false, 3000);
     }
 
@@ -994,7 +994,7 @@ uint8_t LoRaPHY::link_ADR_request(adr_req_params_t *link_adr_req,
         verify_params.adr_enabled = link_adr_req->adr_enabled;
         verify_params.current_datarate = link_adr_req->current_datarate;
         verify_params.current_tx_power = link_adr_req->current_tx_power;
-        verify_params.current_nb_rep = link_adr_req->current_nb_rep;
+        verify_params.current_nb_rep = link_adr_req->current_nb_trans;
 
         verify_params.datarate = adr_settings.datarate;
         verify_params.tx_power = adr_settings.tx_power;
@@ -1103,8 +1103,8 @@ uint8_t LoRaPHY::dl_channel_request(uint8_t channel_id, uint32_t rx1_frequency)
     uint8_t status = 0x03;
 
     // Verify if the frequency is supported
-    uint8_t band = lookup_band_for_frequency(rx1_frequency);
-    if (verify_frequency_for_band(rx1_frequency, band) == false) {
+    int band = lookup_band_for_frequency(rx1_frequency);
+    if (band < 0) {
         status &= 0xFE;
     }
 
@@ -1182,7 +1182,7 @@ void LoRaPHY::calculate_backoff(bool joined, bool last_tx_was_join_req, bool dc_
     // Reset time-off to initial value.
     band_table[band_idx].off_time = 0;
 
-    if (joined == false) {
+    if (MBED_CONF_LORA_DUTY_CYCLE_ON_JOIN && joined == false) {
         // Get the join duty cycle
         if (elapsed_time < 3600000) {
             join_duty_cycle = BACKOFF_DC_1_HOUR;
@@ -1235,7 +1235,7 @@ lorawan_status_t LoRaPHY::set_next_channel(channel_selection_params_t *params,
     }
 
     if (params->aggregate_timeoff
-            <= _lora_time.get_elapsed_time(params->last_aggregate_tx_time)) {
+            <= _lora_time->get_elapsed_time(params->last_aggregate_tx_time)) {
         // Reset Aggregated time off
         *aggregate_timeoff = 0;
 
@@ -1245,13 +1245,13 @@ lorawan_status_t LoRaPHY::set_next_channel(channel_selection_params_t *params,
                                             band_table, phy_params.bands.size);
 
         // Search how many channels are enabled
-        channel_count = enabled_channel_count(params->joined, params->current_datarate,
+        channel_count = enabled_channel_count(params->current_datarate,
                                               phy_params.channels.mask,
                                               enabled_channels, &delay_tx);
     } else {
         delay_tx++;
         next_tx_delay = params->aggregate_timeoff -
-                        _lora_time.get_elapsed_time(params->last_aggregate_tx_time);
+                        _lora_time->get_elapsed_time(params->last_aggregate_tx_time);
     }
 
     if (channel_count > 0) {
@@ -1306,7 +1306,7 @@ lorawan_status_t LoRaPHY::add_channel(const channel_params_t *new_channel,
     // Default channels don't accept all values
     if (id < phy_params.default_channel_cnt) {
         // Validate the datarate range for min: must be DR_0
-        if (new_channel->dr_range.fields.min > phy_params.min_tx_datarate) {
+        if (new_channel->dr_range.fields.min != DR_0) {
             dr_invalid = true;
         }
 
@@ -1345,7 +1345,7 @@ lorawan_status_t LoRaPHY::add_channel(const channel_params_t *new_channel,
         return LORAWAN_STATUS_FREQUENCY_INVALID;
     }
 
-    memcpy(&(phy_params.channels.channel_list[id]), new_channel, sizeof(channel_params_t));
+    memmove(&(phy_params.channels.channel_list[id]), new_channel, sizeof(channel_params_t));
 
     phy_params.channels.channel_list[id].band = new_channel->band;
 

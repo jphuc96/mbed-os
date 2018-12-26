@@ -39,12 +39,12 @@ const PinMap PinMap_DAC[] = {
 
 /************I2C***************/
 const PinMap PinMap_I2C_SDA[] = {
-    {GPIO_AD_B1_01, I2C_1, ((1U << DAISY_REG_VALUE_SHIFT) | (0x4D0 << DAISY_REG_SHIFT) | 3)},
+    {GPIO_AD_B1_01, I2C_1, ((1U << DAISY_REG_VALUE_SHIFT) | (0x4D0 << DAISY_REG_SHIFT) | (1U << SION_BIT_SHIFT) | 3)},
     {NC   , NC   , 0}
 };
 
 const PinMap PinMap_I2C_SCL[] = {
-    {GPIO_AD_B1_00, I2C_1, ((1U << DAISY_REG_VALUE_SHIFT) | (0x4CC << DAISY_REG_SHIFT) | 3)},
+    {GPIO_AD_B1_00, I2C_1, ((1U << DAISY_REG_VALUE_SHIFT) | (0x4CC << DAISY_REG_SHIFT) | (1U << SION_BIT_SHIFT) | 3)},
     {NC   , NC   , 0}
 };
 
@@ -88,6 +88,9 @@ const PinMap PinMap_SPI_SSEL[] = {
 const PinMap PinMap_PWM[] = {
     {GPIO_AD_B0_10, PWM_7, ((3U << DAISY_REG_VALUE_SHIFT) | (0x454 << DAISY_REG_SHIFT) | 1)},
     {GPIO_AD_B0_11, PWM_8, ((3U << DAISY_REG_VALUE_SHIFT) | (0x464 << DAISY_REG_SHIFT) | 1)},
+    {GPIO_AD_B1_08, PWM_25, ((1U << DAISY_REG_VALUE_SHIFT) | (0x494 << DAISY_REG_SHIFT) | 1)},
+    {GPIO_SD_B0_00, PWM_1, ((1U << DAISY_REG_VALUE_SHIFT) | (0x458 << DAISY_REG_SHIFT) | 1)},
+    {GPIO_SD_B0_01, PWM_2, ((1U << DAISY_REG_VALUE_SHIFT) | (0x468 << DAISY_REG_SHIFT) | 1)},
     {NC   , NC    , 0}
 };
 

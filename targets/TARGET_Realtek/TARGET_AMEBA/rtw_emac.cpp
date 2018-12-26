@@ -56,7 +56,7 @@ void RTW_EMAC::get_ifname(char *name, uint8_t size) const
 
 uint8_t RTW_EMAC::get_hwaddr_size() const
 {
-    return ETHARP_HWADDR_LEN;
+    return ETH_HWADDR_LEN;
 }
 
 bool RTW_EMAC::get_hwaddr(uint8_t *addr) const
@@ -76,6 +76,7 @@ bool RTW_EMAC::get_hwaddr(uint8_t *addr) const
     } else {
         printf("Get HW address failed\r\n");
     }
+    return true;
 }
 
 void RTW_EMAC::set_hwaddr(const uint8_t *addr)

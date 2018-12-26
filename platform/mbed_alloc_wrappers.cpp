@@ -27,10 +27,10 @@
 /* There are two memory tracers in mbed OS:
 
 - the first can be used to detect the maximum heap usage at runtime. It is
-  activated by defining the MBED_HEAP_STATS_ENABLED macro.
+  activated by setting the configuration option MBED_HEAP_STATS_ENABLED to true.
 - the second can be used to trace each memory call by automatically invoking
   a callback on each memory operation (see hal/api/mbed_mem_trace.h). It is
-  activated by defining the MBED_MEM_TRACING_ENABLED macro.
+  activated by setting the configuration option MBED_MEM_TRACING_ENABLED to true.
 
 Both tracers can be activated and deactivated in any combination. If both tracers
 are active, the second one (MBED_MEM_TRACING_ENABLED) will trace the first one's
@@ -40,15 +40,24 @@ are active, the second one (MBED_MEM_TRACING_ENABLED) will trace the first one's
 /* Implementation of the runtime max heap usage checker                       */
 /******************************************************************************/
 
-/* Size must be a multiple of 8 to keep alignment */
 typedef struct {
     uint32_t size;
-    uint32_t pad;
+    uint32_t signature;
 } alloc_info_t;
 
 #ifdef MBED_HEAP_STATS_ENABLED
+#define MBED_HEAP_STATS_SIGNATURE       (0xdeadbeef)
+
 static SingletonPtr<PlatformMutex> malloc_stats_mutex;
-static mbed_stats_heap_t heap_stats = {0, 0, 0, 0, 0};
+static mbed_stats_heap_t heap_stats = {0, 0, 0, 0, 0, 0, 0};
+
+typedef struct  {
+    size_t size;
+} mbed_heap_overhead_t;
+
+#define MALLOC_HEADER_SIZE          (sizeof(mbed_heap_overhead_t))
+#define MALLOC_HEADER_PTR(p)        (mbed_heap_overhead_t *)((char *)(p) - MALLOC_HEADER_SIZE)
+#define MALLOC_HEAP_TOTAL_SIZE(p)   (((p)->size) & (~0x1))
 #endif
 
 void mbed_stats_heap_get(mbed_stats_heap_t *stats)
@@ -71,10 +80,6 @@ void mbed_stats_heap_get(mbed_stats_heap_t *stats)
 
 #if defined(TOOLCHAIN_GCC)
 
-#ifdef   FEATURE_UVISOR
-#include "uvisor-lib/uvisor-lib.h"
-#endif/* FEATURE_UVISOR */
-
 extern "C" {
     void *__real__malloc_r(struct _reent *r, size_t size);
     void *__real__memalign_r(struct _reent *r, size_t alignment, size_t bytes);
@@ -85,8 +90,6 @@ extern "C" {
     void free_wrapper(struct _reent *r, void *ptr, void *caller);
 }
 
-// TODO: memory tracing doesn't work with uVisor enabled.
-#if !defined(FEATURE_UVISOR)
 
 extern "C" void *__wrap__malloc_r(struct _reent *r, size_t size)
 {
@@ -104,6 +107,7 @@ extern "C" void *malloc_wrapper(struct _reent *r, size_t size, void *caller)
     alloc_info_t *alloc_info = (alloc_info_t *)__real__malloc_r(r, size + sizeof(alloc_info_t));
     if (alloc_info != NULL) {
         alloc_info->size = size;
+        alloc_info->signature = MBED_HEAP_STATS_SIGNATURE;
         ptr = (void *)(alloc_info + 1);
         heap_stats.current_size += size;
         heap_stats.total_size += size;
@@ -111,6 +115,7 @@ extern "C" void *malloc_wrapper(struct _reent *r, size_t size, void *caller)
         if (heap_stats.current_size > heap_stats.max_size) {
             heap_stats.max_size = heap_stats.current_size;
         }
+        heap_stats.overhead_size += MALLOC_HEAP_TOTAL_SIZE(MALLOC_HEADER_PTR(alloc_info)) - size;
     } else {
         heap_stats.alloc_fail_cnt += 1;
     }
@@ -183,10 +188,19 @@ extern "C" void free_wrapper(struct _reent *r, void *ptr, void *caller)
     alloc_info_t *alloc_info = NULL;
     if (ptr != NULL) {
         alloc_info = ((alloc_info_t *)ptr) - 1;
-        heap_stats.current_size -= alloc_info->size;
-        heap_stats.alloc_cnt -= 1;
+        if (MBED_HEAP_STATS_SIGNATURE == alloc_info->signature) {
+            size_t user_size = alloc_info->size;
+            size_t alloc_size = MALLOC_HEAP_TOTAL_SIZE(MALLOC_HEADER_PTR(alloc_info));
+            alloc_info->signature = 0x0;
+            heap_stats.current_size -= user_size;
+            heap_stats.alloc_cnt -= 1;
+            heap_stats.overhead_size -= (alloc_size - user_size);
+            __real__free_r(r, (void *)alloc_info);
+        } else {
+            __real__free_r(r, ptr);
+        }
     }
-    __real__free_r(r, (void *)alloc_info);
+
     malloc_stats_mutex->unlock();
 #else // #ifdef MBED_HEAP_STATS_ENABLED
     __real__free_r(r, ptr);
@@ -224,8 +238,6 @@ extern "C" void *__wrap__memalign_r(struct _reent *r, size_t alignment, size_t b
 {
     return __real__memalign_r(r, alignment, bytes);
 }
-
-#endif // if !defined(FEATURE_UVISOR)
 
 
 /******************************************************************************/
@@ -266,7 +278,6 @@ extern "C" {
     void free_wrapper(void *ptr, void *caller);
 }
 
-
 extern "C" void *SUB_MALLOC(size_t size)
 {
     return malloc_wrapper(size, MBED_CALLER_ADDR());
@@ -283,6 +294,7 @@ extern "C" void *malloc_wrapper(size_t size, void *caller)
     alloc_info_t *alloc_info = (alloc_info_t *)SUPER_MALLOC(size + sizeof(alloc_info_t));
     if (alloc_info != NULL) {
         alloc_info->size = size;
+        alloc_info->signature = MBED_HEAP_STATS_SIGNATURE;
         ptr = (void *)(alloc_info + 1);
         heap_stats.current_size += size;
         heap_stats.total_size += size;
@@ -290,6 +302,7 @@ extern "C" void *malloc_wrapper(size_t size, void *caller)
         if (heap_stats.current_size > heap_stats.max_size) {
             heap_stats.max_size = heap_stats.current_size;
         }
+        heap_stats.overhead_size += MALLOC_HEAP_TOTAL_SIZE(MALLOC_HEADER_PTR(alloc_info)) - size;
     } else {
         heap_stats.alloc_fail_cnt += 1;
     }
@@ -328,7 +341,7 @@ extern "C" void *SUB_REALLOC(void *ptr, size_t size)
 
     // If the new buffer has been allocated copy the data to it
     // and free the old buffer
-    if (new_ptr != NULL) {
+    if ((new_ptr != NULL) && (ptr != NULL)) {
         uint32_t copy_size = (old_size < size) ? old_size : size;
         memcpy(new_ptr, (void *)ptr, copy_size);
         free(ptr);
@@ -380,10 +393,19 @@ extern "C" void free_wrapper(void *ptr, void *caller)
     alloc_info_t *alloc_info = NULL;
     if (ptr != NULL) {
         alloc_info = ((alloc_info_t *)ptr) - 1;
-        heap_stats.current_size -= alloc_info->size;
-        heap_stats.alloc_cnt -= 1;
+        if (MBED_HEAP_STATS_SIGNATURE == alloc_info->signature) {
+            size_t user_size = alloc_info->size;
+            size_t alloc_size = MALLOC_HEAP_TOTAL_SIZE(MALLOC_HEADER_PTR(alloc_info));
+            alloc_info->signature = 0x0;
+            heap_stats.current_size -= user_size;
+            heap_stats.alloc_cnt -= 1;
+            heap_stats.overhead_size -= (alloc_size - user_size);
+            SUPER_FREE((void *)alloc_info);
+        } else {
+            SUPER_FREE(ptr);
+        }
     }
-    SUPER_FREE((void *)alloc_info);
+
     malloc_stats_mutex->unlock();
 #else // #ifdef MBED_HEAP_STATS_ENABLED
     SUPER_FREE(ptr);

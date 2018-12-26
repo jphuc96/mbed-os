@@ -28,7 +28,7 @@ class NetworkInterface;
 
 /** SocketAddress class
  *
- *  Representation of an IP address and port pair. 
+ *  Representation of an IP address and port pair.
  *  @addtogroup netsocket
  */
 class SocketAddress {
@@ -42,15 +42,15 @@ public:
      *
      *  @param stack    Network stack to use for DNS resolution
      *  @param host     Hostname to resolve
-     *  @param port     Optional 16-bit port
+     *  @param port     Optional 16-bit port, defaults to 0
      *  @deprecated
      *      Constructors hide possible errors. Replaced by
      *      NetworkInterface::gethostbyname.
      */
     template <typename S>
     MBED_DEPRECATED_SINCE("mbed-os-5.1.3",
-        "Constructors hide possible errors. Replaced by "
-        "NetworkInterface::gethostbyname.")
+                          "Constructors hide possible errors. Replaced by "
+                          "NetworkInterface::gethostbyname.")
     SocketAddress(S *stack, const char *host, uint16_t port = 0)
     {
         _SocketAddress(nsapi_create_stack(stack), host, port);
@@ -58,15 +58,17 @@ public:
 
     /** Create a SocketAddress from a raw IP address and port
      *
+     * To construct from a host name, use NetworkInterface::gethostbyname
+     *
      *  @param addr     Raw IP address
-     *  @param port     Optional 16-bit port
+     *  @param port     Optional 16-bit port, defaults to 0
      */
     SocketAddress(nsapi_addr_t addr = nsapi_addr_t(), uint16_t port = 0);
 
     /** Create a SocketAddress from an IP address and port
      *
      *  @param addr     Null-terminated representation of the IP address
-     *  @param port     Optional 16-bit port
+     *  @param port     Optional 16-bit port, defaults to 0
      */
     SocketAddress(const char *addr, uint16_t port = 0);
 
@@ -74,7 +76,7 @@ public:
      *
      *  @param bytes    Raw IP address in big-endian order
      *  @param version  IP address version, NSAPI_IPv4 or NSAPI_IPv6
-     *  @param port     Optional 16-bit port
+     *  @param port     Optional 16-bit port, defaults to 0
      */
     SocketAddress(const void *bytes, nsapi_version_t version, uint16_t port = 0);
 
@@ -83,7 +85,10 @@ public:
      *  @param addr  SocketAddress to copy
      */
     SocketAddress(const SocketAddress &addr);
-   
+
+    /** Destructor */
+    ~SocketAddress();
+
     /** Set the IP address
      *
      *  @param addr     Null-terminated represention of the IP address
@@ -110,8 +115,11 @@ public:
      *  @param port     16-bit port
      */
     void set_port(uint16_t port);
-    
-    /** Get the IP address
+
+    /** Get the human-readable IP address
+     *
+     *  Allocates memory for a string and converts binary address to
+     *  human-readable format. String is freed in the destructor.
      *
      *  @return         Null-terminated representation of the IP Address
      */
@@ -134,7 +142,7 @@ public:
      *  @return         Raw IP address
      */
     nsapi_addr_t get_addr() const;
-    
+
     /** Get the port
      *
      *  @return         The 16-bit port
@@ -146,6 +154,12 @@ public:
      *  @return         True if address is not zero
      */
     operator bool() const;
+
+    /** Copy address from another SocketAddress
+     *
+     * @param addr  SocketAddress to copy
+     */
+    SocketAddress &operator=(const SocketAddress &addr);
 
     /** Compare two addresses for equality
      *
@@ -162,7 +176,7 @@ public:
 private:
     void _SocketAddress(NetworkStack *iface, const char *host, uint16_t port);
 
-    mutable char _ip_address[NSAPI_IP_SIZE];
+    mutable char *_ip_address;
     nsapi_addr_t _addr;
     uint16_t _port;
 };

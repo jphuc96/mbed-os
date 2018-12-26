@@ -16,7 +16,6 @@
  */
 
 #include "mbed.h"
-#include MBED_CONF_APP_HEADER_FILE
 #include "TCPSocket.h"
 #include "greentea-client/test_env.h"
 #include "unity/unity.h"
@@ -25,13 +24,12 @@
 
 using namespace utest::v1;
 
-namespace
-{
-    static const int SIGNAL_SIGIO = 0x1;
-    static const int SIGIO_TIMEOUT = 20000; //[ms]
+namespace {
+static const int SIGNAL_SIGIO = 0x1;
+static const int SIGIO_TIMEOUT = 20000; //[ms]
 }
 
-static nsapi_error_t _tcpsocket_connect_to_chargen_srv(TCPSocket& sock)
+static nsapi_error_t _tcpsocket_connect_to_chargen_srv(TCPSocket &sock)
 {
     SocketAddress tcp_addr;
 
@@ -60,32 +58,42 @@ static nsapi_error_t _tcpsocket_connect_to_chargen_srv(TCPSocket& sock)
  * \param offset Start pattern from offset
  * \param len Length of pattern to generate.
  */
-static void generate_RFC_864_pattern(size_t offset, uint8_t *buf,  size_t len)
+static void generate_RFC_864_pattern(size_t offset, uint8_t *buf,  size_t len, bool is_xinetd)
 {
+    const int row_size = 74; // Number of chars in single row
+    const int row_count = 95; // Number of rows in pattern after which pattern start from beginning
+    const int chars_scope = is_xinetd ? 93 : 95; // Number of chars from ASCII table used in pattern
+    const char first_char = is_xinetd ? '!' : ' '; // First char from ASCII table used in pattern
     while (len--) {
-        if (offset % 74 == 72)
+        if (offset % row_size == (row_size - 2)) {
             *buf++ = '\r';
-        else if (offset % 74 == 73)
+        } else if (offset % row_size == (row_size - 1)) {
             *buf++ = '\n';
-        else
-            *buf++ = ' ' + (offset%74 + offset/74) % 95 ;
+        } else {
+            *buf++ = first_char + (offset % row_size + ((offset / row_size) % row_count)) % chars_scope;
+        }
         offset++;
     }
 }
 
 static void check_RFC_864_pattern(void *rx_buff, const size_t len, const size_t offset)
 {
+    static bool is_xinetd = false;
     void *ref_buff = malloc(len);
     TEST_ASSERT_NOT_NULL(ref_buff);
 
-    generate_RFC_864_pattern(offset, (uint8_t*)ref_buff, len);
+    if (offset == 0) {
+        is_xinetd = ((uint8_t *)rx_buff)[0] == '!';
+    }
+    generate_RFC_864_pattern(offset, (uint8_t *)ref_buff, len, is_xinetd);
     bool match = memcmp(ref_buff, rx_buff, len) == 0;
 
     free(ref_buff);
     TEST_ASSERT(match);
 }
 
-void rcv_n_chk_against_rfc864_pattern(TCPSocket& sock) {
+void rcv_n_chk_against_rfc864_pattern(TCPSocket &sock)
+{
     static const size_t total_size = 1024 * 100;
     static const size_t buff_size = 1220;
     uint8_t buff[buff_size];
@@ -121,7 +129,7 @@ void TCPSOCKET_RECV_100K()
     TEST_ASSERT_EQUAL(NSAPI_ERROR_OK, sock.close());
 }
 
-void rcv_n_chk_against_rfc864_pattern_nonblock(TCPSocket& sock)
+void rcv_n_chk_against_rfc864_pattern_nonblock(TCPSocket &sock)
 {
     static const size_t total_size = 1024 * 100;
     static const size_t buff_size = 1220;
@@ -154,7 +162,8 @@ void rcv_n_chk_against_rfc864_pattern_nonblock(TCPSocket& sock)
     printf("MBED: Time taken: %fs\n", timer.read());
 }
 
-static void _sigio_handler(osThreadId id) {
+static void _sigio_handler(osThreadId id)
+{
     osSignalSet(id, SIGNAL_SIGIO);
 }
 
@@ -169,7 +178,7 @@ void TCPSOCKET_RECV_100K_NONBLOCK()
     }
 
     sock.set_blocking(false);
-    sock.sigio(callback(_sigio_handler, Thread::gettid()));
+    sock.sigio(callback(_sigio_handler, ThisThread::get_id()));
 
     rcv_n_chk_against_rfc864_pattern_nonblock(sock);
 

@@ -69,7 +69,7 @@ void Nanostack::Interface::attach(
 }
 
 Nanostack::Interface::Interface(NanostackPhy &phy) : interface_phy(phy), interface_id(-1), _device_id(-1),
-      _connect_status(NSAPI_STATUS_DISCONNECTED), _blocking(true)
+    _connect_status(NSAPI_STATUS_DISCONNECTED), _previous_connection_status(NSAPI_STATUS_DISCONNECTED), _blocking(true)
 {
     mesh_system_init();
 }
@@ -82,21 +82,44 @@ InterfaceNanostack::InterfaceNanostack()
     // Nothing to do
 }
 
+int InterfaceNanostack::connect()
+{
+    nsapi_error_t error = do_initialize();
+    if (error) {
+        return error;
+    }
+
+    return _interface->bringup(false, NULL, NULL, NULL, IPV6_STACK, _blocking);
+}
+
+int InterfaceNanostack::disconnect()
+{
+    if (!_interface) {
+        return NSAPI_ERROR_NO_CONNECTION;
+    }
+    return _interface->bringdown();
+}
+
 nsapi_error_t MeshInterfaceNanostack::initialize(NanostackRfPhy *phy)
 {
-    if (_phy) {
+    if (_phy && phy && _phy != phy) {
         error("Phy already set");
         return NSAPI_ERROR_IS_CONNECTED;
     }
-    _phy = phy;
-    return NSAPI_ERROR_OK;
+    if (phy) {
+        _phy = phy;
+    }
+    if (_phy) {
+        return do_initialize();
+    } else {
+        return NSAPI_ERROR_PARAMETER;
+    }
 }
-
 
 void Nanostack::Interface::network_handler(mesh_connection_status_t status)
 {
     if ((status == MESH_CONNECTED || status == MESH_CONNECTED_LOCAL ||
-         status == MESH_CONNECTED_GLOBAL) && _blocking) {
+            status == MESH_CONNECTED_GLOBAL) && _blocking) {
         connect_semaphore.release();
     }
 
@@ -108,29 +131,33 @@ void Nanostack::Interface::network_handler(mesh_connection_status_t status)
             _connect_status = NSAPI_STATUS_LOCAL_UP;
         }
         if (arm_net_address_get(interface_id, ADDR_IPV6_GP, temp_ipv6_global) == 0
-            && (memcmp(temp_ipv6_global, temp_ipv6_local, 16) != 0)) {
+                && (memcmp(temp_ipv6_global, temp_ipv6_local, 16) != 0)) {
             _connect_status = NSAPI_STATUS_GLOBAL_UP;
         }
-    } else if (status == MESH_CONNECTED_LOCAL ) {
+    } else if (status == MESH_CONNECTED_LOCAL) {
         _connect_status = NSAPI_STATUS_LOCAL_UP;
     } else if (status == MESH_CONNECTED_GLOBAL) {
         _connect_status = NSAPI_STATUS_GLOBAL_UP;
-    } else if (status == MESH_BOOTSTRAP_STARTED) {
+    } else if (status == MESH_BOOTSTRAP_STARTED || status == MESH_BOOTSTRAP_FAILED) {
         _connect_status = NSAPI_STATUS_CONNECTING;
     } else {
         _connect_status = NSAPI_STATUS_DISCONNECTED;
     }
 
-    if (_connection_status_cb) {
+    if (_connection_status_cb && _previous_connection_status != _connect_status) {
+
         _connection_status_cb(NSAPI_EVENT_CONNECTION_STATUS_CHANGE, _connect_status);
     }
+    _previous_connection_status = _connect_status;
 }
 
 nsapi_error_t Nanostack::Interface::register_phy()
 {
     NanostackLockGuard lock;
 
-    _device_id = interface_phy.phy_register();
+    if (_device_id < 0) {
+        _device_id = interface_phy.phy_register();
+    }
     if (_device_id < 0) {
         return NSAPI_ERROR_DEVICE_ERROR;
     }

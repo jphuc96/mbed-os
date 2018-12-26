@@ -15,6 +15,7 @@
  */
 
 #include "EMACInterface.h"
+using namespace mbed;
 
 /* Interface implementation */
 EMACInterface::EMACInterface(EMAC &emac, OnboardNetworkStack &stack) :
@@ -61,11 +62,11 @@ nsapi_error_t EMACInterface::connect()
     }
 
     return _interface->bringup(_dhcp,
-            _ip_address[0] ? _ip_address : 0,
-            _netmask[0] ? _netmask : 0,
-            _gateway[0] ? _gateway : 0,
-            DEFAULT_STACK,
-            _blocking);
+                               _ip_address[0] ? _ip_address : 0,
+                               _netmask[0] ? _netmask : 0,
+                               _gateway[0] ? _gateway : 0,
+                               DEFAULT_STACK,
+                               _blocking);
 }
 
 nsapi_error_t EMACInterface::disconnect()
@@ -117,7 +118,7 @@ NetworkStack *EMACInterface::get_stack()
 }
 
 void EMACInterface::attach(
-    Callback<void(nsapi_event_t, intptr_t)> status_cb)
+    mbed::Callback<void(nsapi_event_t, intptr_t)> status_cb)
 {
     _connection_status_cb = status_cb;
     if (_interface) {
